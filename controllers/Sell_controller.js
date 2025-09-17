@@ -8,45 +8,56 @@ const createSell = async (userId, products) => {
     throw new Error("products must be a non-empty array");
   }
 
-  let totalAmount = 0;
-  let numberOfProducts = 0;
+  return await Sell.sequelize.transaction(async (t) => {
+    let totalAmount = 0;
+    let numberOfProducts = 0;
 
-  // Crear la venta primero
-  const sell = await Sell.create({
-    userId,
-    status: "pendiente",
-  });
+    const sell = await Sell.create(
+      { userId, status: "pendiente" },
+      { transaction: t }
+    );
 
-  for (let p of products) {
-    const product = await Product.findByPk(p.ProductId);
+    for (let p of products) {
+      const product = await Product.findByPk(p.ProductId, { transaction: t });
+      if (!product) throw new Error(`Producto con id ${p.ProductId} no encontrado`);
 
-    if (!product) throw new Error(`Producto con id ${p.ProductId} no encontrado`);
+      if (product.stock < p.quantity) {
+        throw new Error(
+          `Stock insuficiente para ${product.name}. Disponible: ${product.stock}, solicitado: ${p.quantity}`
+        );
+      }
 
-    // Verificar que los IDs sean strings UUID válidos
-    if (typeof sell.id !== "string" || typeof product.id !== "string") {
-      throw new Error("Sell.id o Product.id no son UUID válidos");
+      const subtotal = Number(product.price) * p.quantity;
+      totalAmount += subtotal;
+      numberOfProducts += p.quantity;
+
+      await product.update(
+        { stock: product.stock - p.quantity },
+        { transaction: t }
+      );
+
+      await SellProduct.create(
+        {
+          SellId: sell.id,
+          ProductId: product.id,
+          quantity: p.quantity,
+          price: product.price,
+        },
+        { transaction: t }
+      );
     }
 
-    const subtotal = Number(product.price) * p.quantity;
-    totalAmount += subtotal;
-    numberOfProducts += p.quantity;
+    await sell.update({ totalAmount, numberOfProducts }, { transaction: t });
 
-    // Crear el registro en la tabla intermedia
-    await SellProduct.create({
-      SellId: sell.id,
-      ProductId: product.id,
-      quantity: p.quantity,
-      price: product.price,
-    });
-  }
-
-  // Actualizar totales de la venta
-  sell.totalAmount = totalAmount;
-  sell.numberOfProducts = numberOfProducts;
-  await sell.save();
-
-  return sell;
+    return {
+      ...sell.toJSON(),
+      totalAmount,
+      numberOfProducts,
+    };
+  });
 };
+
+
 
 
 const confirmSell = async (sellId, userId) => {

@@ -32,7 +32,7 @@ app.use("/uploads", express.static("uploads"));
 
 
 
-sequelize.sync({ force:false}).then( () => {
+sequelize.sync({ force:true}).then( () => {
     console.log("DB sincronizada");
     app.listen(3001, () => console.log("Servidor escuchando en puerto 3001 "));
 }).catch(err => {

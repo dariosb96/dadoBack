@@ -13,8 +13,16 @@ Product.belongsTo(User, { foreignKey: "userId" });
 User.hasMany(Sell, { foreignKey: "userId", onDelete: "CASCADE" });
 Sell.belongsTo(User, { foreignKey: "userId" });
 
-Sell.belongsToMany(Product, { through: SellProduct });
-Product.belongsToMany(Sell, { through: SellProduct });
+Sell.belongsToMany(Product, { through: SellProduct, foreignKey: "SellId", otherKey: "ProductId" });
+Product.belongsToMany(Sell, { through: SellProduct, foreignKey: "ProductId", otherKey: "SellId" });
+
+/*/ Relaciones top products /*/
+SellProduct.belongsTo(Product, { foreignKey: "ProductId" });
+Product.hasMany(SellProduct, { foreignKey: "ProductId" });
+
+SellProduct.belongsTo(Sell, { foreignKey: "SellId" });
+Sell.hasMany(SellProduct, { foreignKey: "SellId" });
+
 
 module.exports = {
     Product,

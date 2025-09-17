@@ -5,13 +5,12 @@ const SellProduct = sequelize.define("SellProduct", {
   SellId: {
     type: DataTypes.UUID,
     allowNull: false,
-    primaryKey: true,
+
   },
   ProductId: {
     type: DataTypes.UUID,
     allowNull: false,
-    primaryKey: true,
-  },
+     },
   quantity: {
     type: DataTypes.INTEGER,
     allowNull: false,
