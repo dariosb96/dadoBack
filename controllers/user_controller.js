@@ -6,21 +6,24 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const secret = process.env.JWT_SECRET;
 
-const createUser = async(name, businessName, email, password) => {
-      const existingUser = await User.findOne({ where: { email } });
+const createUser = async (name, businessName, email, password) => {
+  const existingUser = await User.findOne({ where: { email } });
   if (existingUser) {
     throw new Error("El correo ya está registrado");
   }
-    const hashedPassword = await bcrypt.hash(password, 12);
+  const hashedPassword = await bcrypt.hash(password, 12);
+  const userCount = await User.count();
+  const newUser = await User.create({
+    name,
+    businessName,
+    email,
+    password: hashedPassword,
+    role: userCount === 0 ? "superadmin" : "user", 
+  });
 
-    const newUser = await User.create({
-        name,
-        businessName,
-        email,
-          password: hashedPassword
-    })    
-    return newUser;
-}
+  return newUser;
+};
+
 
 const loginUser = async (email, password) => {
     const user = await User.findOne({where: {email}});

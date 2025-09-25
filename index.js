@@ -20,10 +20,10 @@ app.use(morgan("dev"));
 app.use( cors ({
     origin: 'http://localhost:5173',
     credentials: true,
-    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'], //autorizacion peticiones front
-    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+ methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires']
+}));
 
-}) );
 
 app.use(express.json());
 app.use("/", router); 

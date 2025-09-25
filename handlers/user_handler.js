@@ -33,13 +33,18 @@ const login_handler = async (req, res) => {
             throw new Error("invalid password");
         }
 
-        const token = jwt.sign({id: user.id, }, secret, {expiresIn: "1d"});
+        const token = jwt.sign(
+          { id: user.id, role: user.role }, // 🔥 ahora incluye el rol
+            secret,
+          { expiresIn: "1d" }
+            );
         console.log(token)
         res.status(200).json({
             token,
             userdata: {
                 id:user.id,
-                email: user.email
+                email: user.email,
+                 role: user.role,
             },
         });
     }catch(error){
