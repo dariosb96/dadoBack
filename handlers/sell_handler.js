@@ -1,4 +1,4 @@
-const { createSell, confirmSell, getUserSells, getSellById } = require("../controllers/Sell_controller");
+const { createSell, confirmSell, getUserSells, getSellById, deleteSell } = require("../controllers/Sell_controller");
 
 // Crear venta
 const createSellHandler = async (req, res) => {
@@ -67,9 +67,19 @@ const getSellByIdHandler = async (req, res) => {
   }
 };
 
+const deleteSell_handler = async (req,res) => {
+  try{
+    const result = await deleteSell(req.params.id);
+    res.json(result);
+  }catch(error){
+    res.status(400).json({error: error.message});
+  }
+}
+
 module.exports = {
   createSellHandler,
   confirmSellHandler,
   getUserSellsHandler,
-  getSellByIdHandler
+  getSellByIdHandler,
+  deleteSell_handler
 };

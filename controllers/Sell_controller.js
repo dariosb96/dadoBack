@@ -118,9 +118,19 @@ const getSellById = async (id) => {
   }
 };
 
+const deleteSell = async (id) => {
+  const sell = await Sell.findByPk(id);
+  if(!sell) throw new Error("venta no encontrada");
+
+  await sell.destroy();
+
+  return {message: "venta eliminada con exito"}
+}
+
 module.exports = {
   createSell,
   confirmSell,
   getUserSells,
-  getSellById
+  getSellById,
+  deleteSell,
 };
