@@ -98,18 +98,24 @@ const filterProducts = async (filters) => {
     };
 };
 
-const getPublicCatalogByUser = async (userId) =>{
-    const products = await Product.findAll({
-        where: {
-            userId,
-            isActive: true
-        },
-        include: [Category]
-    });
+const getPublicCatalogByUser = async (userId) => {
+  const products = await Product.findAll({
+    where: {
+      userId,
+      isActive: true
+    },
+    include: [Category, { model: User, attributes: ["businessName"] }]
+  });
 
-    return products;
-}
+  if (!products.length) {
+    return { businessName: null, products: [] };
+  }
 
+  return {
+    businessName: products[0].User.businessName,
+    products
+  };
+};
 const getPublicCatalogs = async () => {
   const users = await User.findAll({
     attributes: ["id", "businessName"], 
