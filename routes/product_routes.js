@@ -8,8 +8,8 @@ const ProductRouter = Router();
 ProductRouter.get('/', verifytoken, getAllProductsHandler);
 ProductRouter.get('/stock', getActiveHandler);
 ProductRouter.get('/filter', getProductFilter_handler);
-ProductRouter.get('/catalogs', getAllPublicCatalogHandler); // <-- antes de :userId y :id
-ProductRouter.get('/catalog/:userId', getCatalogByuserHandler);
+ProductRouter.get('/catalogs', getAllPublicCatalogHandler); 
+ProductRouter.get('/catalogs/:userId', getCatalogByuserHandler);
 ProductRouter.get('/:id', getProductByHandler);
 ProductRouter.post('/', verifytoken, upload.single("image"), createProductHandler);
 ProductRouter.put('/:id', verifytoken, updateProductHandler);

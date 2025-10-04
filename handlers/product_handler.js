@@ -84,13 +84,16 @@ const { getAllProd, createProduct, getProductById, updateProduct, deleteProduct,
 
 const getCatalogByuserHandler = async (req, res) => {
     const userId = req.params.userId;
+     const { category } = req.query;
     try{
-        const products = await getPublicCatalogByUser(userId);
+        const products = await getPublicCatalogByUser(userId, category);
         res.status(200).json(products);
     }catch(error){
         res.status(500).json({error: error.message});
     }
 };
+
+
 
 const getAllPublicCatalogHandler = async (req,res) => {
     try{

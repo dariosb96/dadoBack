@@ -98,24 +98,61 @@ const filterProducts = async (filters) => {
     };
 };
 
-const getPublicCatalogByUser = async (userId) => {
+const isUUID = (str) =>
+  typeof str === "string" &&
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+    str
+  );
+
+const getPublicCatalogByUser = async (userId, category) => {
+  
+
+  const where = { userId, isActive: true };
+
+ 
+  if (category) {
+    if (isUUID(category)) {
+      where.categoryId = category;
+    } else {
+
+      const matchedCategories = await Category.findAll({
+        where: { name: { [Op.iLike]: `%${category}%` } },
+        attributes: ["id", "name"],
+      });
+
+
+      if (!matchedCategories.length) {
+       
+        return { businessName: null, products: [] };
+      }
+
+      const ids = matchedCategories.map((c) => c.id);
+      where.categoryId = { [Op.in]: ids };
+          }
+  }
+
+
   const products = await Product.findAll({
-    where: {
-      userId,
-      isActive: true
-    },
-    include: [Category, { model: User, attributes: ["businessName"] }]
+    where,
+    include: [
+      { model: Category, attributes: ["id", "name"] },
+      { model: User, attributes: ["businessName"] },
+    ],
   });
+
 
   if (!products.length) {
     return { businessName: null, products: [] };
   }
 
   return {
-    businessName: products[0].User.businessName,
-    products
+    businessName: products[0].User?.businessName || null,
+    products,
   };
 };
+
+
+
 const getPublicCatalogs = async () => {
   const users = await User.findAll({
     attributes: ["id", "businessName"], 
