@@ -26,18 +26,17 @@ const createUser = async (name, businessName, email, password) => {
 
 
 const loginUser = async (email, password) => {
-    const user = await User.findOne({where: {email}});
-    if(!user ){
-        throw new Error("User not found");
-    }
+   const user = await User.findOne({ where: { email } });
+  if (!user) throw new Error("User not found");
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+  const isPasswordValid = await bcrypt.compare(password, user.password);
+  if (!isPasswordValid) throw new Error("invalid password");
 
-    if(!isPasswordValid){
-        throw new Error("invalid password");
-    }
-    const token = jwt.sign({id: user.id, role: user.role}, secret, {expiresIn: "1d"} );
-    return token;
+  const token = jwt.sign({ id: user.id, role: user.role }, secret, { expiresIn: "1d" });
+
+  const { password: _, ...userdata } = user.toJSON(); // 👈 esto es importante
+
+  return { token, userdata }; // 👈 y esto también
 }
 
 const getUsers = async() => {

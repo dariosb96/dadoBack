@@ -34,7 +34,7 @@ const login_handler = async (req, res) => {
         }
 
         const token = jwt.sign(
-          { id: user.id, role: user.role }, // 🔥 ahora incluye el rol
+          { id: user.id, role: user.role, name:user.name, businessName: user.businessName }, // 🔥 ahora incluye el rol
             secret,
           { expiresIn: "1d" }
             );
@@ -45,6 +45,8 @@ const login_handler = async (req, res) => {
                 id:user.id,
                 email: user.email,
                  role: user.role,
+                 name:user.name, 
+                 businessName: user.businessName
             },
         });
     }catch(error){
