@@ -8,7 +8,7 @@ const storage = new CloudinaryStorage({
   params: {
     folder: "catalogo",  
     allowed_formats: ["jpg", "jpeg", "png", "webp", "heif"],
-    format: async (req, file) => "jpg", // Convierte todo a .jpg (más ligero)
+    format: async (req, file) => "jpg",
     transformation: [
       { width: 800, crop: "limit" },     
       { quality: "auto" }               
@@ -16,5 +16,7 @@ const storage = new CloudinaryStorage({
   },
 });
 const upload = multer({ storage });
+const uploadMultiple = upload.array("images", 5);
 
-module.exports = upload;
+
+module.exports = {upload, uploadMultiple}

@@ -4,7 +4,6 @@ const { getAllProd, createProduct, getProductById, updateProduct, deleteProduct,
  const getAllProductsHandler = async(req, res) => {
     const userId = req.userId;
     try {
-      
         const products = await getAllProd(userId);
         res.json(products);
     }catch (error){
@@ -32,39 +31,48 @@ const { getAllProd, createProduct, getProductById, updateProduct, deleteProduct,
     }
  };
 
- const createProductHandler = async (req, res) => {
-    try {
-       const { name, description,buyPrice, price, stock, categoryId } = req.body;
-    const image = req.file?.path;
-    const public_id = req.file?.filename;
+const createProductHandler = async (req, res) => {
+  try {
+    const { name, description, buyPrice, price, stock, categoryId } = req.body;
     const userId = req.userId;
-
 
     const newProduct = await createProduct({
       name,
       description,
-      price,
       buyPrice,
+      price,
       stock,
       categoryId,
       userId,
-      image,
-      public_id,
+      files: req.files || [],
     });
-        res.status(201).json(newProduct);
-    }catch ( error) {
-        res.status(500).json({error: error.message});
-    }
- };
 
- const updateProductHandler = async (req, res) => {
-    try{
-        const updatedProduct = await updateProduct(req.params.id, req.body, req.file);
-        res.status(200).json(updatedProduct);
-    }catch(error){
-        res.status(400).json({error: error.message})
-    }
- }
+    res.status(201).json(newProduct);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const updateProductHandler = async (req, res) => {
+  try {
+    const { name, description, buyPrice, price, stock } = req.body;
+    const imagesToDelete = req.body.imagesToDelete;
+
+    const updatedProduct = await updateProduct(req.params.id, {
+      name,
+      description,
+      buyPrice,
+      price,
+      stock,
+      imagesToDelete,
+      files: req.files || [],
+    });
+    res.status(200).json(updatedProduct);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
  const deleteProductHandler = async (req, res) => {
     try{
  const result = await deleteProduct(req.params.id);
@@ -92,8 +100,6 @@ const getCatalogByuserHandler = async (req, res) => {
         res.status(500).json({error: error.message});
     }
 };
-
-
 
 const getAllPublicCatalogHandler = async (req,res) => {
     try{

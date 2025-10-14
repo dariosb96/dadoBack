@@ -5,7 +5,7 @@ const Product = sequelize.define('Product',{
     id: {
         type:DataTypes.UUID,
         primaryKey: true,
-        defaultValue: DataTypes.UUIDV1,
+        defaultValue: DataTypes.UUIDV4,
     },
     name: {
         type: DataTypes.STRING,
@@ -23,11 +23,7 @@ const Product = sequelize.define('Product',{
         type: DataTypes.FLOAT,
         allowNull: false,
     },
-    image:  { 
-        type:   DataTypes.STRING,
-        allowNull: true
-    },
-         stock: {
+     stock: {
         type: DataTypes.INTEGER,
         allowNull: false
     },

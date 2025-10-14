@@ -2,13 +2,18 @@ const {Op } = require('sequelize');
 const Product = require("../models/Product");
 const User = require('../models/User')
 const Category = require("../models/Category");
+const ProductImage = require("../models/ProductImage")
 const { Result } = require('pg');
 const cloudinary = require("../middlewares/cloudinary");
 
 const getActiveProd = async () => {
     const products = await Product.findAll({
         where: {isActive: true},
-        include: [{model: Category}]
+        include: [
+          {model: Category},
+          {model:ProductImage, as:"images"}
+
+        ]
     });
 
     return products;
@@ -20,46 +25,97 @@ const getAllProd = async (userId) => {
         where: {
             userId,
         },
-        include: [Category],
+        include: [
+        { model: Category },
+        { model: ProductImage, as: "images" } 
+      ],
     });
     return products;
 };
 
-const createProduct = async (productData) => {
-    const newProduct = await Product.create(productData);
-    return newProduct;
+const createProduct = async ({ name, description, buyPrice, price, stock, categoryId, userId, files }) => {
+
+  const newProduct = await Product.create({
+    name,
+    description,
+    buyPrice,
+    price,
+    stock,
+    categoryId,
+    userId,
+  });
+
+  if (files && files.length > 0) {
+    const imagesData = files.map((file) => ({
+      url: file.path,
+      public_id: file.filename,
+      productId: newProduct.id,
+    }));
+
+    await ProductImage.bulkCreate(imagesData);
+  }
+  const productWithImages = await Product.findByPk(newProduct.id, {
+    include: [{ model: ProductImage, as: "images" }],
+  });
+
+  return productWithImages;
 };
 
 const getProductById = async (id) => {
     const product = await Product.findByPk(id);
     return product;
 };
-const updateProduct = async (id, data, file) => {
-    const product = await Product.findByPk(id);
-    if (!product) throw new Error('Producto no encontrado');
+const updateProduct = async (id, data) => {
+  const product = await Product.findByPk(id);
+  if (!product) throw new Error("Producto no encontrado");
 
-    if (file) {
-    if (product.public_id) {
-      await cloudinary.uploader.destroy(product.public_id);
+  if (data.imagesToDelete) {
+    const ids = Array.isArray(data.imagesToDelete) ? data.imagesToDelete : [data.imagesToDelete];
+    for (const public_id of ids) {
+      await cloudinary.uploader.destroy(public_id);
+      await ProductImage.destroy({ where: { public_id } });
     }
-
-    // Agrega la nueva imagen y public_id
-    productData.image = file.path;
-    productData.public_id = file.filename;
   }
-    return await product.update(data);
-}
+
+  if (data.files && data.files.length > 0) {
+    const newImages = data.files.map((file) => ({
+      url: file.path,
+      public_id: file.filename,
+      productId: id,
+    }));
+    await ProductImage.bulkCreate(newImages);
+  }
+
+  await product.update({
+    name: data.name,
+    description: data.description,
+    buyPrice: data.buyPrice,
+    price: data.price,
+    stock: data.stock,
+  });
+
+  const updated = await Product.findByPk(id, {
+    include: [{ model: ProductImage, as: "images" }],
+  });
+
+  return updated;
+};
+
 
 const deleteProduct = async (id) => {
- const product = await Product.findByPk(id);
- if(!product) throw new Error("producto no encontrado");
+  const product = await Product.findByPk(id, {
+    include: { model: ProductImage, as: "images" },
+  });
+  if (!product) throw new Error("Producto no encontrado");
 
- if (product.public_id) {
-  await cloudinary.uploader.destroy(product.public_id);   
-}
+  for (const img of product.images) {
+    if (img.public_id) {
+      await cloudinary.uploader.destroy(img.public_id);
+    }
+  }
 
   await product.destroy();
- return { message : 'producto eliminado con exito'};
+  return { message: "Producto eliminado con éxito" };
 };
 
 const filterProducts = async (filters) => {
@@ -76,7 +132,6 @@ const filterProducts = async (filters) => {
 
     const offset = (page - 1) * limit;
 
-    // Ordenamiento
     let order = [["name", "ASC"]];
     if (sort === "price_desc") order = [["price", "DESC"]];
     if (sort === "price_asc") order = [["price", "ASC"]];
@@ -106,9 +161,7 @@ const isUUID = (str) =>
 
 const getPublicCatalogByUser = async (userId, category) => {
   
-
   const where = { userId, isActive: true };
-
  
   if (category) {
     if (isUUID(category)) {
@@ -131,15 +184,14 @@ const getPublicCatalogByUser = async (userId, category) => {
           }
   }
 
-
   const products = await Product.findAll({
     where,
     include: [
       { model: Category, attributes: ["id", "name"] },
       { model: User, attributes: ["businessName"] },
+      { model: ProductImage, as: "images" } 
     ],
   });
-
 
   if (!products.length) {
     return { businessName: null, products: [] };
