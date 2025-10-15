@@ -18,7 +18,7 @@ app.use('/login', rateLimit({ windowMs: 15*60*1000, max: 5 }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(morgan("dev"));
 app.use( cors ({
-    origin: 'http://localhost:5173',
+    origin: 'http://dado-front.vercel.app',
     credentials: true,
  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires']
