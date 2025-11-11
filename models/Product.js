@@ -20,7 +20,7 @@ const Product = sequelize.define('Product',{
         allowNull:false
     },
     price: {
-        type: DataTypes.FLOAT,
+        type: DataTypes.DECIMAL,
         allowNull: false,
     },
      stock: {
@@ -57,7 +57,13 @@ const Product = sequelize.define('Product',{
   }
 }, {
   tableName: 'Products',
-  timestamps: true
+  timestamps: true,
+  defaultScope: {
+    include: [
+      { association: 'images' },
+      { association: 'variants', include: [{ association: 'images' }] }
+    ]
+  }
 });
 
 module.exports = Product;

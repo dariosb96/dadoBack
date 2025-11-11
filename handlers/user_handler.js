@@ -1,27 +1,36 @@
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { createUser,  getUsers, updateUser, deleteUser, loginUser } = require("../controllers/user_controller");
+const { createUser,  getUsers, updateUser, deleteUser, loginUser, getUserById } = require("../controllers/user_controller");
 const { getAllCatalogs } = require("../controllers/dashaboard_controller");
 const secret = process.env.JWT_SECRET;
 
 
 const createUser_handler = async (req, res) => {
   try {
-    
-    const { name, businessName, email, password } = req.body;
-    const imageUrl = req.file ? req.file.path : null; 
+    const { name, businessName, email, phone, password } = req.body;
+    const imageUrl = req.file ? req.file.path : null;
 
     if (!name || !businessName || !email || !password) {
       return res.status(400).json({ error: "Todos los campos son requeridos" });
     }
 
-    const newUser = await createUser(name, businessName, email, password, imageUrl);
+    const newUser = await createUser({ name, businessName, email, phone, password, imageUrl });
     res.status(201).json(newUser);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 };
+
+const getUserById_handler = async (req, res) => {
+  
+  try{
+    const user = await getUserById(req.params.id);
+    res.status(200).json(user)
+  }catch(error){
+    res.status(400).json({error: error.message})
+  }
+}
 
 const login_handler = async (req, res) => {
   const { email, password } = req.body;
@@ -83,6 +92,6 @@ module.exports = {
     getUsersHandler,
     updateUserHandler,
     deleteUserHandler,
-   
+    getUserById_handler  
 
 }

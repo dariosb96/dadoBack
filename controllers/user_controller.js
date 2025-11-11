@@ -6,7 +6,7 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const secret = process.env.JWT_SECRET;
 
-const createUser = async (name, businessName, email, password, imageUrl) => {
+const createUser = async ({ name, businessName, email, phone, password, imageUrl }) => {
   const existingUser = await User.findOne({ where: { email } });
   if (existingUser) {
     throw new Error("El correo ya está registrado");
@@ -19,6 +19,7 @@ const createUser = async (name, businessName, email, password, imageUrl) => {
     name,
     businessName,
     email,
+    phone,
     password: hashedPassword,
     image: imageUrl || null,
     role: userCount === 0 ? "superadmin" : "user",
@@ -26,8 +27,6 @@ const createUser = async (name, businessName, email, password, imageUrl) => {
 
   return newUser;
 };
-
-
 
 const loginUser = async (email, password) => {
   const user = await User.findOne({ where: { email } });
@@ -44,10 +43,14 @@ const loginUser = async (email, password) => {
   return { token, userdata };
 };
 
-
 const getUsers = async() => {
     const users = await User.findAll();
     return users;
+}
+
+const getUserById = async (id) => {
+   const user = await User.findByPk(id);
+   return user;
 }
 
 const updateUser = async (id, data, file) => {
@@ -82,6 +85,7 @@ const updateUser = async (id, data, file) => {
     name: data.name || user.name,
     businessName: data.businessName || user.businessName,
     email: data.email || user.email,
+    phone: data.phone || user.phone,
     password: newPassword,
     image: newImageUrl,
     public_id: newPublicId,
@@ -109,5 +113,6 @@ module.exports = {
     loginUser,
     getUsers,
     updateUser,
-    deleteUser
+    deleteUser,
+    getUserById
 }

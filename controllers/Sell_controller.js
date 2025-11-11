@@ -2,6 +2,8 @@ const Product = require("../models/Product");
 const User = require('../models/User')
 const Sell = require("../models/Sell");
 const SellProduct = require("../models/SellProduct")
+const ProductImage = require("../models/ProductImage")
+const ProductVariant = require("../models/ProductVariant");
 
 const createSell = async (userId, products) => {
   if (!Array.isArray(products) || products.length === 0) {
@@ -58,8 +60,6 @@ const createSell = async (userId, products) => {
 };
 
 
-
-
 const confirmSell = async (sellId, userId) => {
     const sell = await Sell.findOne({where: {id:sellId, userId}});
     if(!sell) throw new Error("Venta no encontrada");
@@ -86,11 +86,18 @@ const confirmSell = async (sellId, userId) => {
 };
 
 const getUserSells = async(userId) => {
-    const sells = await Sell.findAll({
-        where: {userId},
-        include: [{model: Product}],
-        order: [["createdAt", "DESC"]],
-    });
+   const sells = await Sell.findAll({
+  where: { userId },
+  include: [
+    {
+      model: Product,
+      as: "products",
+      through: { attributes: ["quantity", "price"] },
+    },
+  ],
+  order: [["createdAt", "DESC"]],
+});
+
 
     return sells;
 }
@@ -101,11 +108,24 @@ const getSellById = async (id) => {
       include: [
         {
           model: Product,
+          as: "products", // 🔥 IMPORTANTE
           through: {
-            attributes: ["quantity", "price"], // datos de la tabla intermedia
+            model: SellProduct,
+            attributes: ["quantity", "price"],
           },
+          include: [
+            {
+              model: ProductImage,
+              as: "images",
+            },
+            {
+              model: ProductVariant,
+              as: "variants",
+            },
+          ],
         },
       ],
+      order: [["createdAt", "DESC"]],
     });
 
     if (!sell) {
