@@ -27,7 +27,7 @@ app.use(morgan("dev"));
 
 
 const allowedOrigins = [
-  "https://dado-front.vercel.app", 
+  "https://daddo.vercel.app", 
   "http://localhost:5173",        
 ];
 
@@ -54,7 +54,7 @@ app.use("/", router);
 
 
 sequelize
-  .sync({ force: false })
+  .sync({ alter:true })
   .then(() => {
     console.log("DB sincronizada");
     const PORT = process.env.PORT || 3001;
