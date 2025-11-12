@@ -41,71 +41,12 @@ const getAllProd = async (userId) => {
 };
 
 
-// const createProduct = async ({ name, description, buyPrice, price, stock, categoryId, userId, variants }, files = {}) => {
-//   // 1️⃣ Crear producto
-//   const product = await Product.create({
-//     name,
-//     description,
-//     buyPrice,
-//     price,
-//     stock,
-//     categoryId,
-//     userId,
-//   });
+const createProduct = async ({ name, description, color, buyPrice, price, stock, categoryId, userId, variants }, files = {}) => {
 
-
-//   const productFiles = files.images || [];
-//     if (productFiles.length > 0) {
-//      const imagesData = productFiles.map((file) => ({
-//       productId: product.id,
-//       url: file.path || file.location || file.filename,
-//       public_id: file.filename || null,
-//       }));
-//      await ProductImage.bulkCreate(imagesData);
-//   }
-
-//   for (let i = 0; i < (variants?.length || 0); i++) {
-
-//     const v = variants[i];
-//   console.log("VARIANTE:", i, v);
-// console.log("FILES:", Object.keys(files));
-// console.log("FILES VARIANTE:", files[`variantImages_${i}`]);
-//     const newVariant = await ProductVariant.create({
-//       productId: product.id,
-//       color: v.color || null,
-//       size: v.size || null,
-//       stock: v.stock ?? 0,
-//       price: v.price ?? null,
-//       buyPrice: v.buyPrice ?? null,
-//     });
-
-//     const variantFiles = files[`variantImages_${i}`] || [];
-//     if (variantFiles.length > 0) {
-//       const variantImagesData = variantFiles.map((file) => ({
-//         variantId: newVariant.id,
-//         url: file.path || file.location || file.filename,
-//         public_id: file.filename || null,
-//       }));
-//       await VariantImage.bulkCreate(variantImagesData);
-//     }
-//   }
-// return await Product.findByPk(product.id, {
-//   include: [
-//     { model: ProductImage, as: "images" },
-//     {
-//       model: ProductVariant,
-//       as: "variants",
-//       include: [{ model: VariantImage, as: "images" }], 
-//     },
-//     { model: Category, as: "Category" },
-//   ],
-// });
-// };
-const createProduct = async ({ name, description, buyPrice, price, stock, categoryId, userId, variants }, files = {}) => {
-  // 1️⃣ Crear producto principal
   const product = await Product.create({
     name,
     description,
+    color,
     buyPrice,
     price,
     stock,
@@ -113,7 +54,6 @@ const createProduct = async ({ name, description, buyPrice, price, stock, catego
     userId,
   });
 
-  // 2️⃣ Subir imágenes generales del producto
   const productFiles = files.images || [];
   if (productFiles.length > 0) {
     const imagesData = productFiles.map((file) => ({
@@ -124,18 +64,13 @@ const createProduct = async ({ name, description, buyPrice, price, stock, catego
     await ProductImage.bulkCreate(imagesData);
   }
 
-  // 3️⃣ Crear variantes
   for (let i = 0; i < (variants?.length || 0); i++) {
     const v = variants[i];
-    console.log("VARIANTE:", i, v);
-    console.log("FILES:", Object.keys(files));
-    console.log("FILES VARIANTE:", files[`variantImages_${i}`]);
 
-    // ⚙️ Asignar valores por defecto del producto si la variante no tiene precio
     const variantPrice = v.price != null && v.price !== "" ? v.price : product.price;
     const variantBuyPrice = v.buyPrice != null && v.buyPrice !== "" ? v.buyPrice : product.buyPrice;
 
-    // Crear la variante
+
     const newVariant = await ProductVariant.create({
       productId: product.id,
       color: v.color || null,
@@ -145,7 +80,6 @@ const createProduct = async ({ name, description, buyPrice, price, stock, catego
       buyPrice: variantBuyPrice,
     });
 
-    // 📷 Subir imágenes de la variante (si las hay)
     const variantFiles = files[`variantImages_${i}`] || [];
     if (variantFiles.length > 0) {
       const variantImagesData = variantFiles.map((file) => ({
@@ -157,7 +91,6 @@ const createProduct = async ({ name, description, buyPrice, price, stock, catego
     }
   }
 
-  // 4️⃣ Retornar producto con todo relacionado
   return await Product.findByPk(product.id, {
     include: [
       { model: ProductImage, as: "images" },
@@ -283,6 +216,7 @@ const updateProduct = async (req) => {
   await product.update({
     name: data.name,
     description: data.description,
+    color: data.color,
     buyPrice: data.buyPrice,
     price: data.price,
     stock: data.stock,

@@ -42,7 +42,7 @@ const getProductByHandler = async (req, res) => {
 
 const createProductHandler = async (req, res) => {
   try {
-    const { name, description, buyPrice, price, stock, categoryId, variants } = req.body;
+    const { name, description, color, buyPrice, price, stock, categoryId, variants } = req.body;
     const userId = req.userId;
 
     const parsedVariants = variants ? JSON.parse(variants) : [];
@@ -51,6 +51,7 @@ const createProductHandler = async (req, res) => {
       {
         name,
         description,
+        color,
         buyPrice,
         price,
         stock,

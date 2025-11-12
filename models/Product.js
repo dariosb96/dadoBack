@@ -15,10 +15,15 @@ const Product = sequelize.define('Product',{
         type: DataTypes.STRING,
         allowNull: true,
     }, 
+     color:{
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     buyPrice: {
         type: DataTypes.INTEGER,
         allowNull:false
     },
+   
     price: {
         type: DataTypes.DECIMAL,
         allowNull: false,
