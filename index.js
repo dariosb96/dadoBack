@@ -54,7 +54,7 @@ app.use("/", router);
 
 
 sequelize
-  .sync({ alter:true })
+  .sync({ force:true  })
   .then(() => {
     console.log("DB sincronizada");
     const PORT = process.env.PORT || 3001;

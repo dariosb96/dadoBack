@@ -337,7 +337,7 @@ const getPublicCatalogs = async () => {
     include: [
       {
         model: Product,
-        attributes: ["id", "name", "price", "isActive", "categoryId"],
+        attributes: ["id", "name","color", "price", "isActive", "categoryId"],
         where: { isActive: true },
         include: [
           { model: Category, attributes: ["id", "name"] },
