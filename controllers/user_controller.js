@@ -5,6 +5,7 @@ const Category = require("../models/Category")
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const secret = process.env.JWT_SECRET;
+const sendEmail = require("../utils/mailer");
 
 const createUser = async ({ name, businessName, email, phone, password, imageUrl }) => {
   const existingUser = await User.findOne({ where: { email } });
@@ -107,6 +108,56 @@ const deleteUser = async(id) => {
     return {message: 'usuario eliminado con exito'};
 }
 
+const requestPasswordReset = async (email) => {
+  const user = await User.findOne({ where: { email } });
+
+  if (!user) {
+    throw new Error("No existe un usuario con ese correo");
+  }
+
+  // token válido 15 minutos
+  const token = jwt.sign({ id: user.id }, secret, { expiresIn: "15m" });
+
+  const resetLink = `${process.env.FRONT_URL}/reset-password/${token}`;
+
+  await sendEmail(
+    user.email,
+    "Restablecimiento de contraseña - Daddo",
+    `
+      <h2>Restablece tu contraseña</h2>
+      <p>Da clic en el siguiente enlace para cambiar tu contraseña:</p>
+      <a href="${resetLink}" target="_blank">${resetLink}</a>
+      <p>Este enlace expira en 15 minutos.</p>
+    `
+  );
+
+  return { message: "Se envió un correo con el enlace de restablecimiento" };
+};
+
+
+const resetPassword = async (token, newPassword) => {
+  let decoded;
+
+  try {
+    decoded = jwt.verify(token, secret);
+  } catch (error) {
+    throw new Error("Token inválido o expirado");
+  }
+
+  const user = await User.findByPk(decoded.id);
+
+  if (!user) {
+    throw new Error("Usuario no encontrado");
+  }
+
+  const hashed = await bcrypt.hash(newPassword, 10);
+  user.password = hashed;
+
+  await user.save();
+
+  return { message: "Contraseña actualizada correctamente" };
+};
+
 
 module.exports = {
     createUser,
@@ -114,5 +165,7 @@ module.exports = {
     getUsers,
     updateUser,
     deleteUser,
-    getUserById
+    getUserById,
+    requestPasswordReset,
+    resetPassword
 }

@@ -1,7 +1,7 @@
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { createUser,  getUsers, updateUser, deleteUser, loginUser, getUserById } = require("../controllers/user_controller");
+const { createUser,  getUsers, updateUser, deleteUser, loginUser, getUserById, requestPasswordReset, resetPassword } = require("../controllers/user_controller");
 const { getAllCatalogs } = require("../controllers/dashaboard_controller");
 const secret = process.env.JWT_SECRET;
 
@@ -39,9 +39,9 @@ const login_handler = async (req, res) => {
     const { token, userdata } = await loginUser(email, password);
     res.status(200).json({ token, userdata });
   } catch (error) {
-    if (error.message === "User not found") {
+    if (error.message === "Usuario no encontrado") {
       res.status(404).json({ message: error.message });
-    } else if (error.message === "Invalid password") {
+    } else if (error.message === "contraseña incorrecta") {
       res.status(401).json({ message: error.message });
     } else {
       res.status(500).json({ message: "Internal server error" });
@@ -84,6 +84,29 @@ const deleteUserHandler = async(req, res) => {
     }
 }
 
+const requestPasswordResetHandler = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const result = await requestPasswordReset(email);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+const resetPasswordHandler = async (req, res) => {
+  const { token } = req.params;
+  const { newPassword } = req.body;
+
+  try {
+    const result = await resetPassword(token, newPassword);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 
 
 module.exports = {
@@ -92,6 +115,7 @@ module.exports = {
     getUsersHandler,
     updateUserHandler,
     deleteUserHandler,
-    getUserById_handler  
-
+    getUserById_handler ,
+    requestPasswordResetHandler,
+    resetPasswordHandler
 }
