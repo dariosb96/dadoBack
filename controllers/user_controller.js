@@ -29,12 +29,28 @@ const createUser = async ({ name, businessName, email, phone, password, imageUrl
   return newUser;
 };
 
+
+//Errores:
+
+class NotFoundError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "NotFoundError";
+  }
+}
+
+class UnauthorizedError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "UnauthorizedError";
+  }
+}
 const loginUser = async (email, password) => {
   const user = await User.findOne({ where: { email } });
-  if (!user) throw new Error("Usuario no encontrado");
+  if (!user) throw new NotFoundError("Usuario no encontrado");
 
   const isPasswordValid = await bcrypt.compare(password, user.password);
-  if (!isPasswordValid) throw new Error("contraseña incorrecta");
+  if (!isPasswordValid) throw new UnauthorizedError("Contraseña incorrecta");
 
   const token = jwt.sign({ id: user.id, role: user.role }, secret, {
     expiresIn: "1d",
@@ -43,6 +59,22 @@ const loginUser = async (email, password) => {
   const { password: _, ...userdata } = user.toJSON();
   return { token, userdata };
 };
+
+
+// const loginUser = async (email, password) => {
+//   const user = await User.findOne({ where: { email } });
+//   if (!user) throw new Error("Usuario no encontrado");
+
+//   const isPasswordValid = await bcrypt.compare(password, user.password);
+//   if (!isPasswordValid) throw new Error("contraseña incorrecta");
+
+//   const token = jwt.sign({ id: user.id, role: user.role }, secret, {
+//     expiresIn: "1d",
+//   });
+
+//   const { password: _, ...userdata } = user.toJSON();
+//   return { token, userdata };
+// };
 
 const getUsers = async() => {
     const users = await User.findAll();

@@ -32,6 +32,7 @@ const getUserById_handler = async (req, res) => {
   }
 }
 
+
 const login_handler = async (req, res) => {
   const { email, password } = req.body;
 
@@ -39,12 +40,14 @@ const login_handler = async (req, res) => {
     const { token, userdata } = await loginUser(email, password);
     res.status(200).json({ token, userdata });
   } catch (error) {
-    if (error.message === "Usuario no encontrado") {
-      res.status(404).json({ message: error.message });
-    } else if (error.message === "contraseña incorrecta") {
-      res.status(401).json({ message: error.message });
+    console.error("Login error:", error); 
+
+    if (error.name === "NotFoundError") {
+      return res.status(404).json({ message: error.message });
+    } else if (error.name === "UnauthorizedError") {
+      return res.status(401).json({ message: error.message });
     } else {
-      res.status(500).json({ message: "Internal server error" });
+      return res.status(500).json({ message: "Error interno del servidor" });
     }
   }
 };

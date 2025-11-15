@@ -21,8 +21,6 @@ app.use(
 
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-
 app.use(morgan("dev"));
 
 
@@ -54,7 +52,7 @@ app.use("/", router);
 
 
 sequelize
-  .sync({ alter: true  })
+  .sync({ alter: false  })
   .then(() => {
     console.log("DB sincronizada");
     const PORT = process.env.PORT || 3001;
