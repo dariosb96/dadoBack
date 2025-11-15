@@ -1,7 +1,7 @@
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { createUser,  getUsers, updateUser, deleteUser, loginUser, getUserById, requestPasswordReset, resetPassword } = require("../controllers/user_controller");
+const { createUser,  getUsers, updateUser, deleteUser, loginUser, getUserById, requestPasswordReset, resetPassword, registerController } = require("../controllers/user_controller");
 const { getAllCatalogs } = require("../controllers/dashaboard_controller");
 const secret = process.env.JWT_SECRET;
 
@@ -110,6 +110,19 @@ const resetPasswordHandler = async (req, res) => {
   }
 };
 
+const registerHandler = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    const user = await registerController(name, email, password);
+
+    return res.status(201).json({ message: "Usuario registrado correctamente", user });
+
+  } catch (error) {
+    console.error("Error en registerHandler:", error);
+    return res.status(400).json({ message: error.message });
+  }
+};
 
 
 module.exports = {
@@ -120,5 +133,6 @@ module.exports = {
     deleteUserHandler,
     getUserById_handler ,
     requestPasswordResetHandler,
-    resetPasswordHandler
+    resetPasswordHandler,
+    registerHandler
 }

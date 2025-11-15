@@ -29,9 +29,6 @@ const createUser = async ({ name, businessName, email, phone, password, imageUrl
   return newUser;
 };
 
-
-//Errores:
-
 class NotFoundError extends Error {
   constructor(message) {
     super(message);
@@ -45,6 +42,7 @@ class UnauthorizedError extends Error {
     this.name = "UnauthorizedError";
   }
 }
+
 const loginUser = async (email, password) => {
   const user = await User.findOne({ where: { email } });
   if (!user) throw new NotFoundError("Usuario no encontrado");
@@ -60,21 +58,6 @@ const loginUser = async (email, password) => {
   return { token, userdata };
 };
 
-
-// const loginUser = async (email, password) => {
-//   const user = await User.findOne({ where: { email } });
-//   if (!user) throw new Error("Usuario no encontrado");
-
-//   const isPasswordValid = await bcrypt.compare(password, user.password);
-//   if (!isPasswordValid) throw new Error("contraseña incorrecta");
-
-//   const token = jwt.sign({ id: user.id, role: user.role }, secret, {
-//     expiresIn: "1d",
-//   });
-
-//   const { password: _, ...userdata } = user.toJSON();
-//   return { token, userdata };
-// };
 
 const getUsers = async() => {
     const users = await User.findAll();
@@ -147,9 +130,7 @@ const requestPasswordReset = async (email) => {
     throw new Error("No existe un usuario con ese correo");
   }
 
-  // token válido 15 minutos
   const token = jwt.sign({ id: user.id }, secret, { expiresIn: "15m" });
-
   const resetLink = `${process.env.FRONT_URL}/reset-password/${token}`;
 
   await sendEmail(
@@ -175,13 +156,11 @@ const resetPassword = async (token, newPassword) => {
   } catch (error) {
     throw new Error("Token inválido o expirado");
   }
-
   const user = await User.findByPk(decoded.id);
 
   if (!user) {
     throw new Error("Usuario no encontrado");
   }
-
   const hashed = await bcrypt.hash(newPassword, 10);
   user.password = hashed;
 
@@ -190,6 +169,37 @@ const resetPassword = async (token, newPassword) => {
   return { message: "Contraseña actualizada correctamente" };
 };
 
+const registerController = async (name, email, password) => {
+  
+  const userExists = await User.findOne({ where: { email } });
+  if (userExists) throw new Error("Este email ya está registrado");
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const newUser = await User.create({
+    name,
+    email,
+    password: hashedPassword,
+  });
+
+  const htmlAdmin = `
+    <h2>Nuevo usuario registrado en Daddo</h2>
+    <p><strong>Nombre:</strong> ${name}</p>
+    <p><strong>Email:</strong> ${email}</p>
+  `;
+
+  await sendEmail(process.env.EMAIL_USER, "Nuevo registro en Daddo", htmlAdmin);
+
+  const htmlUser = `
+    <h2>Bienvenido a Daddo 🎉</h2>
+    <p>Hola ${name},</p>
+    <p>Tu registro ha sido exitoso. Ahora puedes ingresar a la plataforma.</p>
+  `;
+
+  await sendEmail(email, "¡Bienvenido a Daddo!", htmlUser);
+
+  return newUser;
+};
 
 module.exports = {
     createUser,
@@ -199,5 +209,6 @@ module.exports = {
     deleteUser,
     getUserById,
     requestPasswordReset,
-    resetPassword
+    resetPassword,
+    registerController,
 }
