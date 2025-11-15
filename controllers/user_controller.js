@@ -5,7 +5,7 @@ const Category = require("../models/Category")
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const secret = process.env.JWT_SECRET;
-const sendEmail = require("../utils/mailer");
+const sendEmail = require("../middlewares/mailer");
 
 const createUser = async ({ name, businessName, email, phone, password, imageUrl }) => {
   const existingUser = await User.findOne({ where: { email } });
