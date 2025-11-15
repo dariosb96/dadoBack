@@ -7,11 +7,10 @@ const bcrypt = require("bcrypt");
 const secret = process.env.JWT_SECRET;
 const sendEmail = require("../middlewares/mailer");
 
+
 const createUser = async ({ name, businessName, email, phone, password, imageUrl }) => {
   const existingUser = await User.findOne({ where: { email } });
-  if (existingUser) {
-    throw new Error("El correo ya está registrado");
-  }
+  if (existingUser) throw new Error("El correo ya está registrado");
 
   const hashedPassword = await bcrypt.hash(password, 12);
   const userCount = await User.count();
@@ -25,6 +24,21 @@ const createUser = async ({ name, businessName, email, phone, password, imageUrl
     image: imageUrl || null,
     role: userCount === 0 ? "superadmin" : "user",
   });
+
+  
+  const htmlAdmin = `
+    <h2>Nuevo usuario registrado en Daddo</h2>
+    <p><strong>Nombre:</strong> ${name}</p>
+    <p><strong>Email:</strong> ${email}</p>
+  `;
+  await sendEmail(process.env.EMAIL_USER, "Nuevo usuario registrado", htmlAdmin);
+
+
+  const htmlUser = `
+    <h2>¡Bienvenido a Daddo!</h2>
+    <p>Hola ${name}, tu cuenta fue creada con éxito.</p>
+  `;
+  await sendEmail(email, "Bienvenido a Daddo 🎉", htmlUser);
 
   return newUser;
 };
@@ -169,37 +183,7 @@ const resetPassword = async (token, newPassword) => {
   return { message: "Contraseña actualizada correctamente" };
 };
 
-const registerController = async (name, email, password) => {
-  
-  const userExists = await User.findOne({ where: { email } });
-  if (userExists) throw new Error("Este email ya está registrado");
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  const newUser = await User.create({
-    name,
-    email,
-    password: hashedPassword,
-  });
-
-  const htmlAdmin = `
-    <h2>Nuevo usuario registrado en Daddo</h2>
-    <p><strong>Nombre:</strong> ${name}</p>
-    <p><strong>Email:</strong> ${email}</p>
-  `;
-
-  await sendEmail(process.env.EMAIL_USER, "Nuevo registro en Daddo", htmlAdmin);
-
-  const htmlUser = `
-    <h2>Bienvenido a Daddo 🎉</h2>
-    <p>Hola ${name},</p>
-    <p>Tu registro ha sido exitoso. Ahora puedes ingresar a la plataforma.</p>
-  `;
-
-  await sendEmail(email, "¡Bienvenido a Daddo!", htmlUser);
-
-  return newUser;
-};
 
 module.exports = {
     createUser,
@@ -210,5 +194,4 @@ module.exports = {
     getUserById,
     requestPasswordReset,
     resetPassword,
-    registerController,
 }
