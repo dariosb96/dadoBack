@@ -36,6 +36,11 @@ const Product = sequelize.define('Product',{
         type:DataTypes.BOOLEAN,
         defaultValue: true
     },
+    reserved: {
+  type: DataTypes.INTEGER,
+  defaultValue: 0,
+  allowNull: false,
+},
     public_id: {
         type:DataTypes.STRING,
         allowNull: true
