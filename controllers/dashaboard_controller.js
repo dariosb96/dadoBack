@@ -1,40 +1,53 @@
 const Product = require("../models/Product");
-const Category = require("../models/Category");
 const User = require("../models/User");
 const Sell = require("../models/Sell");
 const SellProduct = require("../models/SellProduct");
-const ProductImage = require("../models/ProductImage")
-const ProductVariant = require("../models/ProductVariant")
-const VariantImage = require("../models/VariantImage")
+const ProductImage = require("../models/ProductImage");
+const ProductVariant = require("../models/ProductVariant");
+const VariantImage = require("../models/VariantImage");
 const { Op, fn, col, literal } = require("sequelize");
 
-// === Ventas por día ===
-const getSalesByDay = async () => {
+
+const getSalesByDay = async (userId = null) => {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date();
   endOfDay.setHours(23, 59, 59, 999);
 
+  const where = {
+    status: "finalizado",
+    finishDate: { [Op.between]: [startOfDay, endOfDay] },
+    ...(userId && { userId })
+  };
+
   const sales = await Sell.findAll({
-    where: {
-      status: "finalizado",
-      finishDate: { [Op.between]: [startOfDay, endOfDay] },
-    },
+    where,
     include: [
       {
         model: SellProduct,
         as: "items",
-        include: [{ model: Product, as: "product" }],
+        include: [
+          {
+            model: Product,
+            as: "product",
+            required: false,
+            include: [
+              { model: ProductImage, as: "images", required: false },
+              { model: ProductVariant, as: "variants", required: false }
+            ]
+          }
+        ]
       },
-      { model: User, as: "user", attributes: ["id", "name"] },
+      { model: User, as: "user", attributes: ["id", "name"], required: !!userId }
     ],
+    order: [["finishDate", "DESC"]]
   });
 
   return sales;
 };
 
-// === Ventas por mes ===
-const getSalesByMonth = async () => {
+
+const getSalesByMonth = async (userId = null) => {
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
@@ -44,169 +57,341 @@ const getSalesByMonth = async () => {
   endOfMonth.setDate(0);
   endOfMonth.setHours(23, 59, 59, 999);
 
+  const where = {
+    status: "finalizado",
+    finishDate: { [Op.between]: [startOfMonth, endOfMonth] },
+    ...(userId && { userId })
+  };
+
   const sales = await Sell.findAll({
+    where,
+    include: [
+      {
+        model: SellProduct,
+        as: "items",
+        include: [
+          {
+            model: Product,
+            as: "product",
+            required: false,
+            include: [
+              { model: ProductImage, as: "images", required: false },
+              { model: ProductVariant, as: "variants", required: false }
+            ]
+          }
+        ]
+      },
+      { model: User, as: "user", attributes: ["id", "name"], required: !!userId }
+    ],
+    order: [["finishDate", "DESC"]]
+  });
+
+  return sales;
+};
+
+const getTopSoldProducts = async (startDate, endDate, userId = null) => {
+  const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const end = endDate ? new Date(endDate) : new Date();
+
+  const topData = await SellProduct.findAll({
+    attributes: [
+      "ProductId",
+      [fn("SUM", col("quantity")), "totalSold"]
+    ],
+    include: [
+      {
+        model: Sell,
+        as: "sell",
+        attributes: [],
+        where: {
+          status: "finalizado",
+          finishDate: { [Op.between]: [start, end] },
+          ...(userId && { userId })
+        }
+      }
+    ],
+    group: ["ProductId"],
+    order: [literal(`"totalSold" DESC`)],
+    limit: 10,
+    raw: true
+  });
+
+  const productIds = topData.map(p => p.ProductId);
+
+  const products = await Product.findAll({
+    where: { id: productIds, ...(userId && { userId }) },
+    include: [
+      { model: ProductImage, as: "images", attributes: ["url"], required: false },
+      {
+        model: ProductVariant,
+        as: "variants",
+        required: false,
+        include: [{ model: VariantImage, as: "images", attributes: ["url"], required: false }]
+      }
+    ]
+  });
+
+  return topData.map(item => ({
+    ...item,
+    product: products.find(p => p.id === item.ProductId) || null
+  }));
+};
+
+const getSalesByUser = async (userId) => {
+  const where = {
+    status: "finalizado",
+    ...(userId && { userId })
+  };
+
+  const sales = await Sell.findAll({
+    where,
+    include: [
+      {
+        model: SellProduct,
+        as: "items",
+        include: [
+          {
+            model: Product,
+            as: "product",
+            required: false,
+            include: [
+              { model: ProductImage, as: "images", required: false },
+              { model: ProductVariant, as: "variants", required: false }
+            ]
+          }
+        ]
+      },
+      { model: User, as: "user", attributes: ["id", "name"], required: !!userId }
+    ],
+    order: [["finishDate", "DESC"]]
+  });
+
+  return sales;
+};
+
+const getDashboardDataByDateRange = async (startDate, endDate, userId = null) => {
+  const where = {
+    status: "finalizado",
+    finishDate: { [Op.between]: [new Date(startDate), new Date(endDate)] },
+    ...(userId && { userId })
+  };
+
+  const sells = await Sell.findAll({
+    where,
+    include: [
+      {
+        model: SellProduct,
+        as: "items",
+        include: [
+          {
+            model: Product,
+            as: "product",
+            required: false,
+            attributes: ["name", "price", "buyPrice"],
+          }
+        ]
+      }
+    ],
+    order: [["finishDate", "ASC"]]
+  });
+
+  let totalSales = 0;
+  let totalProfit = 0;
+  let totalQuantity = 0;
+  const dailyStats = {};
+
+  sells.forEach(sell => {
+    const day = sell.finishDate.toISOString().split("T")[0];
+    if (!dailyStats[day]) dailyStats[day] = { sales: 0, profit: 0, quantity: 0 };
+
+    sell.items.forEach(item => {
+      const total = Number(item.price) * item.quantity;
+      const buy = Number(item.product?.buyPrice || 0);
+      const profit = (Number(item.price) - buy) * item.quantity;
+
+      totalSales += total;
+      totalProfit += profit;
+      totalQuantity += item.quantity;
+
+      dailyStats[day].sales += total;
+      dailyStats[day].profit += profit;
+      dailyStats[day].quantity += item.quantity;
+    });
+  });
+
+  const dailyData = Object.entries(dailyStats).map(([date, data]) => ({ date, ...data }));
+
+  return {
+    totalSales,
+    totalProfit,
+    totalQuantity,
+    totalSells: sells.length,
+    range: { startDate, endDate },
+    dailyData
+  };
+};
+
+const getSalesByWeek = async (userId = null) => {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+
+  const startOfWeek = new Date(now.setDate(diff));
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+
+  const where = {
+    status: "finalizado",
+    finishDate: { [Op.between]: [startOfWeek, endOfWeek] },
+    ...(userId && { userId })
+  };
+
+  const sales = await Sell.findAll({
+    where,
+    include: [
+      {
+        model: SellProduct,
+        as: "items",
+        include: [
+          { model: Product, as: "product" }
+        ]
+      }
+    ],
+    order: [["finishDate", "DESC"]]
+  });
+
+  return sales;
+};
+
+
+const getAllUsers = async () => {
+  const users = await User.findAll({
+    attributes: ["id", "name", "email", "businessName", "role", "createdAt"],
+    order: [["createdAt", "DESC"]],
+  });
+
+  return users;
+};
+
+const getLowStockProducts = async (threshold = 5, userId = null) => {
+  const where = {
+    stock: { [Op.lte]: threshold },
+    ...(userId && { userId })
+  };
+
+  const products = await Product.findAll({
+    where,
+    include: [
+      {
+        model: ProductVariant,
+        as: "variants",
+        required: false
+      }
+    ],
+    order: [["stock", "ASC"]]
+  });
+
+  return products;
+};
+
+const getProductProfit = async (startDate, endDate, userId = null) => {
+  const sells = await Sell.findAll({
     where: {
       status: "finalizado",
-      finishDate: { [Op.between]: [startOfMonth, endOfMonth] },
+      finishDate: { [Op.between]: [new Date(startDate), new Date(endDate)] },
+      ...(userId && { userId })
     },
     include: [
       {
         model: SellProduct,
         as: "items",
-        include: [{ model: Product, as: "product" }],
-      },
-      { model: User, as: "user", attributes: ["id", "name"] },
-    ],
+        include: [
+          { model: Product, as: "product", attributes: ["name", "buyPrice"] }
+        ]
+      }
+    ]
   });
 
-  return sales;
-};
+  const profitMap = {};
 
-// === Productos más vendidos ===
-const getTopSoldProducts = async (startDate, endDate) => {
-    const start = startDate
-    ? new Date(startDate)
-    : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  const end = endDate ? new Date(endDate) : new Date();
+  sells.forEach(sell => {
+    sell.items.forEach(item => {
+      const pid = item.ProductId;
 
-  try {
-    // 1️⃣ Obtenemos el total de productos vendidos agrupando por ProductId
-    const topData = await SellProduct.findAll({
-      attributes: [
-        "ProductId",
-        [fn("SUM", col("quantity")), "totalSold"],
-      ],
-      where: {
-        createdAt: { [Op.between]: [start, end] },
-      },
-      group: ["ProductId"],
-      // 🔧 Usamos literal con comillas para evitar el error de alias
-      order: [literal(`"totalSold" DESC`)],
-      limit: 10,
-      raw: true,
-    });
-
-    // 2️⃣ Traemos los productos completos con sus imágenes/variantes
-    const productIds = topData.map((p) => p.ProductId);
-
-    const products = await Product.findAll({
-      where: { id: productIds },
-      include: [
-        { model: ProductImage, as: "images", attributes: ["url"] },
-        {
-          model: ProductVariant,
-          as: "variants",
-          attributes: ["color", "size", "stock", "price", "buyPrice"],
-          include: [{ model: VariantImage, as: "images", attributes: ["url"] }],
-        },
-      ],
-    });
-
-    // 3️⃣ Combinamos los datos de ventas con la info de los productos
-    const result = topData.map((item) => {
-      const product = products.find((p) => p.id === item.ProductId);
-      return {
-        ...item,
-        product,
-      };
-    });
-
-    return result;
-  } catch (error) {
-    console.error("❌ Error en getTopSoldProducts:", error);
-    throw error;
-  }
-};
-
-
-// === Ventas agrupadas por usuario ===
-const getSalesByUser = async () => {
-  const sales = await Sell.findAll({
-    where: { status: "finalizado" },
-    include: [
-      {
-        model: SellProduct,
-        as: "items",
-        include: [{ model: Product, as: "product" }],
-      },
-      { model: User, as: "user", attributes: ["id", "name"] },
-    ],
-  });
-
-  return sales;
-};
-
-// === Ventas por rango de fechas ===
-const getDashboardDataByDateRange = async (startDate, endDate, userId) => {
-  try {
-    const whereCondition = {
-      createdAt: {
-        [Op.between]: [new Date(startDate), new Date(endDate)],
-      },
-    };
-
-    if (userId) whereCondition.userId = userId;
-
-    const sells = await Sell.findAll({
-      where: whereCondition,
-      include: [
-        {
-          model: SellProduct,
-          as: "items",
-          include: [
-            {
-              model: Product,
-              as: "product",
-              attributes: ["name", "price", "buyPrice"],
-            },
-          ],
-        },
-      ],
-      order: [["createdAt", "ASC"]],
-    });
-
-    let totalSales = 0;
-    let totalProfit = 0;
-    let totalQuantity = 0;
-    const dailyStats = {};
-
-    sells.forEach((sell) => {
-      const day = sell.createdAt.toISOString().split("T")[0];
-      if (!dailyStats[day]) {
-        dailyStats[day] = { sales: 0, profit: 0, quantity: 0 };
+      if (!profitMap[pid]) {
+        profitMap[pid] = {
+          productId: pid,
+          name: item.product?.name || "N/A",
+          quantity: 0,
+          revenue: 0,
+          profit: 0
+        };
       }
 
-      sell.items.forEach((item) => {
-        const total = item.price * item.quantity;
-        const profit = (item.price - item.product.buyPrice) * item.quantity;
+      const revenue = Number(item.price) * item.quantity;
+      const buy = Number(item.product?.buyPrice || 0);
+      const profit = (Number(item.price) - buy) * item.quantity;
 
-        totalSales += total;
-        totalProfit += profit;
-        totalQuantity += item.quantity;
-
-        dailyStats[day].sales += total;
-        dailyStats[day].profit += profit;
-        dailyStats[day].quantity += item.quantity;
-      });
+      profitMap[pid].quantity += item.quantity;
+      profitMap[pid].revenue += revenue;
+      profitMap[pid].profit += profit;
     });
+  });
 
-    const dailyData = Object.entries(dailyStats).map(([date, data]) => ({
-      date,
-      ...data,
-    }));
+  return Object.values(profitMap).sort((a, b) => b.profit - a.profit);
+};
 
-    return {
-      totalSales,
-      totalProfit,
-      totalQuantity,
-      totalSells: sells.length,
-      range: { startDate, endDate },
-      dailyData,
-    };
-  } catch (error) {
-    console.error("❌ Error en getDashboardDataByDateRange:", error);
-    throw error;
-  }
+const getNewUsersPerMonth = async () => {
+  const users = await User.findAll({
+    attributes: ["id", "createdAt"],
+    order: [["createdAt", "ASC"]]
+  });
+
+  const stats = {};
+
+  users.forEach(user => {
+    const date = new Date(user.createdAt);
+    const key = `${date.getFullYear()}-${(date.getMonth() + 1)
+      .toString()
+      .padStart(2, "0")}`;
+
+    if (!stats[key]) stats[key] = 0;
+    stats[key]++;
+  });
+
+  return stats;
+};
+
+const getInventoryValue = async (userId = null) => {
+  const where = {
+    ...(userId && { userId })
+  };
+
+  const products = await Product.findAll({ where });
+
+  let totalUnits = 0;
+  let totalBuyValue = 0;
+  let totalSellValue = 0;
+
+  products.forEach(p => {
+    const qty = Number(p.stock);
+    const buy = Number(p.buyPrice || 0);
+    const sell = Number(p.price || 0);
+
+    totalUnits += qty;
+    totalBuyValue += qty * buy;
+    totalSellValue += qty * sell;
+  });
+
+  return {
+    totalUnits,
+    totalBuyValue,
+    totalSellValue,
+    projectedProfit: totalSellValue - totalBuyValue
+  };
 };
 
 module.exports = {
@@ -215,4 +400,11 @@ module.exports = {
   getTopSoldProducts,
   getSalesByUser,
   getDashboardDataByDateRange,
+  getAllUsers,
+  getLowStockProducts,
+  getSalesByWeek,
+  getProductProfit,
+  getNewUsersPerMonth,
+  getInventoryValue
 };
+
