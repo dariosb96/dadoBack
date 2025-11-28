@@ -316,7 +316,7 @@ const getPublicCatalogByUser = async (userId, category) => {
     where,
     include: [
       { model: Category, attributes: ["id", "name"] },
-      { model: User, attributes: ["businessName"] },
+      { model: User, attributes: ["businessName", "phone"] },
       { model: ProductImage, as: "images" },
 { model: ProductVariant, as: "variants", include: { model: VariantImage, as: "images" } }
     ],
