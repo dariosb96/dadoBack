@@ -5,6 +5,7 @@ const SellProduct = require("../models/SellProduct")
 const ProductImage = require("../models/ProductImage")
 const ProductVariant = require("../models/ProductVariant");
 
+
 // const createSell = async (userId, products) => {
 //   if (!Array.isArray(products) || products.length === 0) {
 //     throw new Error("products must be a non-empty array");
@@ -23,9 +24,11 @@ const ProductVariant = require("../models/ProductVariant");
 //       const product = await Product.findByPk(p.ProductId, { transaction: t });
 //       if (!product) throw new Error(`Producto con id ${p.ProductId} no encontrado`);
 
-//       if (product.stock < p.quantity) {
+//       const stockDisponible = product.stock - product.reserved;
+
+//       if (stockDisponible < p.quantity) {
 //         throw new Error(
-//           `Stock insuficiente para ${product.name}. Disponible: ${product.stock}, solicitado: ${p.quantity}`
+//           `Stock insuficiente para ${product.name}. Disponible: ${stockDisponible}, solicitado: ${p.quantity}`
 //         );
 //       }
 
@@ -34,7 +37,7 @@ const ProductVariant = require("../models/ProductVariant");
 //       numberOfProducts += p.quantity;
 
 //       await product.update(
-//         { stock: product.stock - p.quantity },
+//         { reserved: product.reserved + p.quantity },
 //         { transaction: t }
 //       );
 
@@ -85,7 +88,10 @@ const createSell = async (userId, products) => {
         );
       }
 
-      const subtotal = Number(product.price) * p.quantity;
+      // ⬇⬇⬇ AQUÍ EL CAMBIO IMPORTANTE ⬇⬇⬇
+      const precioFinal = Number(p.finalPrice) || Number(product.price);
+
+      const subtotal = precioFinal * p.quantity;
       totalAmount += subtotal;
       numberOfProducts += p.quantity;
 
@@ -99,7 +105,7 @@ const createSell = async (userId, products) => {
           SellId: sell.id,
           ProductId: product.id,
           quantity: p.quantity,
-          price: product.price,
+          price: precioFinal, // <-- GUARDAMOS EL PRECIO FINAL
         },
         { transaction: t }
       );
@@ -114,6 +120,7 @@ const createSell = async (userId, products) => {
     };
   });
 };
+
 const cancelSell = async (sellId, userId) => {
   return await Sell.sequelize.transaction(async (t) => {
     const sell = await Sell.findOne({

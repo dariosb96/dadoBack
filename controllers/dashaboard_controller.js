@@ -298,10 +298,17 @@ const getLowStockProducts = async (threshold = 5, userId = null) => {
 };
 
 const getProductProfit = async (startDate, endDate, userId = null) => {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    throw new Error("Las fechas proporcionadas no son válidas");
+  }
+
   const sells = await Sell.findAll({
     where: {
       status: "finalizado",
-      finishDate: { [Op.between]: [new Date(startDate), new Date(endDate)] },
+      finishDate: { [Op.between]: [start, end] },
       ...(userId && { userId })
     },
     include: [

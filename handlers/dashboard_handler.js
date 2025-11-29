@@ -115,8 +115,10 @@ const salesByWeekHandler = async (req, res) => {
 
 const productProfitHandler = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
-     const userId = req.userId;
+        const userId = req.userId;
+
+    const startDate = req.query.startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const endDate = req.query.endDate || new Date();
 
     const data = await getProductProfit(startDate, endDate, userId);
 
@@ -142,7 +144,6 @@ const newUsersPerMonthHandler = async (req, res) => {
 const inventoryValueHandler = async (req, res) => {
   try {
     const userId = req.userId;
-
     const data = await getInventoryValue(userId);
 
     res.json(data);

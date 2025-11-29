@@ -58,7 +58,7 @@ const getSellByIdHandler = async (req, res) => {
 const cancelSellHandler = async (req, res) => {
   try {
     const userId = req.userId;
-    const { sellId } = req.params;
+    const  sellId  = req.params.id
 
     const response = await cancelSell(sellId, userId);
     return res.json(response);
