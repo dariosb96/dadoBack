@@ -1,43 +1,27 @@
-// const jwt = require("jsonwebtoken");
-// const secret = process.env.JWT_SECRET;
-
-// const verifytoken = (req, res, next) => {
-//   const authHeader = req.headers.authorization;
-//   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-//     return res.status(401).json({ message: "Token missing or malformed" });
-//   }
-
-//   const token = authHeader.split(" ")[1];
-
-//   try {
-//     const decoded = jwt.verify(token, secret);
-//     req.userId = decoded.id;
-//     req.userRole = decoded.role; 
-//     next();
-//   } catch (error) {
-//     return res.status(401).json({ message: "invalid token" });
-//   }
-// };
-
-// module.exports = verifytoken;
-
 const jwt = require("jsonwebtoken");
+const  User  = require("../models/User"); 
 const secret = process.env.JWT_SECRET;
 
-const verifyToken = (req, res, next) => {
+const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ message: "Token missing or malformed" });
   }
-
   const token = authHeader.split(" ")[1];
-
   try {
     const decoded = jwt.verify(token, secret);
     req.userId = decoded.id;
     req.userRole = decoded.role;
+
+    const user = await User.findByPk(decoded.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+    req.user = user; 
     next();
+
   } catch (error) {
     if (error.name === "TokenExpiredError") {
       return res.status(401).json({ message: "El token ha expirado" });

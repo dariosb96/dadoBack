@@ -6,7 +6,11 @@ const ProductImage = require("../models/ProductImage");
 const ProductVariant = require("../models/ProductVariant");
 const VariantImage = require("../models/VariantImage")
 const cloudinary = require("../middlewares/cloudinary");
-
+const PDFDocument =require("pdfkit");
+const axios = require("axios");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 
 const getActiveProd = async () => {
   const products = await Product.findAll({
@@ -350,6 +354,141 @@ const getPublicCatalogs = async () => {
   return users;
 };
 
+
+
+async function downloadImageToTemp(url) {
+  try {
+    const response = await axios.get(url, { responseType: "arraybuffer" });
+
+    const tmpPath = path.join(
+      os.tmpdir(),
+      `img_${Date.now()}_${Math.random()}.jpg`
+    );
+
+    fs.writeFileSync(tmpPath, response.data);
+
+    return tmpPath;
+  } catch (err) {
+    console.error("❌ Error descargando imagen:", err.message);
+    return null; 
+  }
+}
+
+
+const generateCatalogPDF = async ({ userId, includePhone = true, includeBusinessName = true, includeOwnerName = true, res }) => {
+  const user = await User.findByPk(userId);
+  if (!user) throw new Error("Usuario no encontrado");
+
+  const products = await Product.findAll({
+    where: { userId, isActive: true },
+    include: [{ model: ProductImage, as: "images" }],
+    order: [["name", "ASC"]],
+  });
+
+  if (!products.length) throw new Error("No hay productos activos");
+
+  const doc = new PDFDocument({
+    size: "LETTER",
+    margins: { top: 40, bottom: 50, left: 40, right: 40 }
+  });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", "attachment; filename=catalogo.pdf");
+
+  doc.pipe(res);
+
+  // ===== ENCABEZADO =====
+  doc.font("Helvetica-Bold").fontSize(24);
+
+  let title = "";
+  if (includeBusinessName && user.businessName) title += user.businessName.toUpperCase();
+  if (!title) title = "CATÁLOGO DE PRODUCTOS";
+
+  doc.text(title, { align: "center" });
+
+  doc.moveDown(0.3);
+  doc.font("Helvetica").fontSize(12);
+
+  let sub = "";
+  if (includeOwnerName) sub += `Propietario: ${user.name}   `;
+  if (includePhone && user.phone) sub += `Tel: ${user.phone}`;
+
+  if (sub.trim()) doc.text(sub, { align: "center" });
+
+  doc.moveDown(1.5);
+
+  // ===== TARJETAS =====
+  const cardWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const cardHeight = 190;
+  const padding = 15;
+  const imgSize = 130;
+
+  for (const p of products) {
+    let startY = doc.y;
+
+    // crear nueva pagina si no cabe
+    if (startY + cardHeight > doc.page.height - doc.page.margins.bottom - 10) {
+      doc.addPage();
+      startY = doc.y;
+    }
+
+    const startX = doc.page.margins.left;
+
+    // fondo card
+    doc.save()
+      .roundedRect(startX, startY, cardWidth, cardHeight, 10)
+      .fillOpacity(0.08)
+      .fill("#4B0082")
+      .restore();
+
+    // imagen
+    const imgX = startX + padding;
+    const imgY = startY + padding;
+
+    const firstImage = p.images?.length ? p.images[0].url : null;
+
+    if (firstImage) {
+      const tmp = await downloadImageToTemp(firstImage);
+      if (tmp) {
+        try {
+          doc.image(tmp, imgX, imgY, { fit: [imgSize, imgSize] });
+        } catch {
+          doc.fontSize(10).fillColor("red").text("Imagen no disponible", imgX, imgY + imgSize / 2);
+        }
+      } else {
+        doc.fontSize(10).fillColor("red").text("Imagen no disponible", imgX, imgY + imgSize / 2);
+      }
+    } else {
+      doc.fontSize(10).fillColor("red").text("Sin imagen", imgX, imgY + imgSize / 2);
+    }
+
+    const textX = imgX + imgSize + padding;
+    let textY = startY + padding;
+
+    doc.font("Helvetica-Bold").fontSize(16).fillColor("#000")
+      .text(p.name, textX, textY, { width: cardWidth - imgSize - padding * 3 });
+
+    textY += 25;
+
+    doc.font("Helvetica").fontSize(12);
+    doc.text(`Precio: $${p.price}`, textX, textY); textY += 18;
+
+    if (p.stock !== undefined) {
+      doc.text(`Stock: ${p.stock}`, textX, textY);
+      textY += 18;
+    }
+
+    if (p.description) {
+      doc.fontSize(10).fillColor("#333")
+        .text(p.description, textX, textY, { width: cardWidth - imgSize - padding * 3 });
+    }
+    doc.y = startY + cardHeight + 22;
+  }
+
+  doc.end();
+};
+
+
 module.exports = {
   getAllProd,
   createProduct,
@@ -360,4 +499,5 @@ module.exports = {
   getActiveProd,
   getPublicCatalogByUser,
   getPublicCatalogs,
+  generateCatalogPDF
 };

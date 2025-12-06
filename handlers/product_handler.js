@@ -7,9 +7,9 @@ const {
   filterProducts,
   getActiveProd,
   getPublicCatalogByUser,
-  getPublicCatalogs
+  getPublicCatalogs,
+  generateCatalogPDF
 } = require("../controllers/product_controller");
-
 
 const getAllProductsHandler = async (req, res) => {
   const userId = req.userId;
@@ -121,6 +121,42 @@ const getAllPublicCatalogHandler = async (req, res) => {
   }
 };
 
+// const generateCatalogPDFHandler = async (req, res) => {
+//   try {
+//     await generateCatalogPDF(req, res);
+//   } catch (error) {
+//     console.error("HANDLER ERROR:", error);
+//     res.status(500).json({ error: "Error generando el PDF" });
+//   }
+// };
+
+const generateCatalogPDFHandler = async (req, res) => {
+  try {
+    const userId = req.userId; // viene del token
+
+    if (!userId) {
+      return res.status(400).json({ error: "Falta el userId en el token" });
+    }
+
+    const {
+      includePhone = true,
+      includeBusinessName = true,
+      includeOwnerName = true,
+    } = req.body || {};
+
+    await generateCatalogPDF({
+      userId,
+      includePhone,
+      includeBusinessName,
+      includeOwnerName,
+      res,
+    });
+
+  } catch (error) {
+    console.error("ERROR EN HANDLER PDF:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
 module.exports = {
   getAllProductsHandler,
   getProductByHandler,
@@ -131,4 +167,5 @@ module.exports = {
   getActiveHandler,
   getCatalogByuserHandler,
   getAllPublicCatalogHandler,
+  generateCatalogPDFHandler
 };
