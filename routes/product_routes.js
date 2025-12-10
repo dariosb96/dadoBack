@@ -10,7 +10,7 @@ ProductRouter.get('/stock', getActiveHandler);
 ProductRouter.get('/filter', getProductFilter_handler);
 ProductRouter.get('/catalogs', getAllPublicCatalogHandler); 
 ProductRouter.get('/catalogs/:userId', getCatalogByuserHandler);
-ProductRouter.get('/export-pdf', verifytoken, generateCatalogPDFHandler);
+ProductRouter.post('/export-pdf', verifytoken, generateCatalogPDFHandler);
 ProductRouter.get('/:id', getProductByHandler);
 ProductRouter.post('/', verifytoken, uploadMultiple, createProductHandler);
 ProductRouter.put('/:id', verifytoken,uploadMultiple, updateProductHandler);
