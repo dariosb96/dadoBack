@@ -369,23 +369,71 @@ async function downloadImageToTemp(url) {
 
     return tmpPath;
   } catch (err) {
-    console.error("❌ Error descargando imagen:", err.message);
+    console.error("Error descargando imagen:", err.message);
     return null; 
   }
 }
 
 
-const generateCatalogPDF = async ({ userId, includePhone = true, includeBusinessName = true, includeOwnerName = true, res }) => {
+const generateCatalogPDF = async ({
+  userId,
+  includePhone = true,
+  includeBusinessName = true,
+  includeOwnerName = true,
+  selectedCategories = [],
+  res
+}) => {
+
   const user = await User.findByPk(userId);
   if (!user) throw new Error("Usuario no encontrado");
+  let categoryIds = [];
+
+  if (Array.isArray(selectedCategories) && selectedCategories.length > 0) {
+
+    if (typeof selectedCategories[0] === "number") {
+      categoryIds = selectedCategories;
+    }
+
+    else if (typeof selectedCategories[0] === "string") {
+
+      const uuids = selectedCategories.filter(isUUID);
+      const names = selectedCategories.filter(c => !isUUID(c));
+
+
+      if (uuids.length > 0) categoryIds.push(...uuids);
+
+      if (names.length > 0) {
+        const found = await Category.findAll({
+          where: { name: names }
+        });
+
+        if (found.length === 0 && uuids.length === 0) {
+          throw new Error("Ninguna de las categorías seleccionadas existe");
+        }
+
+        categoryIds.push(...found.map(c => c.id));
+      }
+    }
+  }
+
+
+  const whereCondition = {
+    userId,
+    isActive: true
+  };
+
+  if (categoryIds.length > 0) {
+    whereCondition.categoryId = categoryIds;
+  }
 
   const products = await Product.findAll({
-    where: { userId, isActive: true },
+    where: whereCondition,
     include: [{ model: ProductImage, as: "images" }],
     order: [["name", "ASC"]],
   });
 
-  if (!products.length) throw new Error("No hay productos activos");
+  if (!products.length) throw new Error("No hay productos activos con esos filtros");
+
 
   const doc = new PDFDocument({
     size: "LETTER",
@@ -397,7 +445,7 @@ const generateCatalogPDF = async ({ userId, includePhone = true, includeBusiness
 
   doc.pipe(res);
 
-  // ===== ENCABEZADO =====
+
   doc.font("Helvetica-Bold").fontSize(24);
 
   let title = "";
@@ -406,6 +454,7 @@ const generateCatalogPDF = async ({ userId, includePhone = true, includeBusiness
 
   doc.text(title, { align: "center" });
 
+  // Subtítulo
   doc.moveDown(0.3);
   doc.font("Helvetica").fontSize(12);
 
@@ -417,16 +466,17 @@ const generateCatalogPDF = async ({ userId, includePhone = true, includeBusiness
 
   doc.moveDown(1.5);
 
-  // ===== TARJETAS =====
+
   const cardWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const cardHeight = 190;
   const padding = 15;
   const imgSize = 130;
 
   for (const p of products) {
+
     let startY = doc.y;
 
-    // crear nueva pagina si no cabe
+    // Salto de página si no cabe
     if (startY + cardHeight > doc.page.height - doc.page.margins.bottom - 10) {
       doc.addPage();
       startY = doc.y;
@@ -434,14 +484,14 @@ const generateCatalogPDF = async ({ userId, includePhone = true, includeBusiness
 
     const startX = doc.page.margins.left;
 
-    // fondo card
+    // Fondo de la tarjeta
     doc.save()
       .roundedRect(startX, startY, cardWidth, cardHeight, 10)
       .fillOpacity(0.08)
       .fill("#4B0082")
       .restore();
 
-    // imagen
+    // Imagen del producto
     const imgX = startX + padding;
     const imgY = startY + padding;
 
@@ -462,6 +512,7 @@ const generateCatalogPDF = async ({ userId, includePhone = true, includeBusiness
       doc.fontSize(10).fillColor("red").text("Sin imagen", imgX, imgY + imgSize / 2);
     }
 
+    // Texto del producto
     const textX = imgX + imgSize + padding;
     let textY = startY + padding;
 
@@ -482,12 +533,12 @@ const generateCatalogPDF = async ({ userId, includePhone = true, includeBusiness
       doc.fontSize(10).fillColor("#333")
         .text(p.description, textX, textY, { width: cardWidth - imgSize - padding * 3 });
     }
+
     doc.y = startY + cardHeight + 22;
   }
 
   doc.end();
 };
-
 
 module.exports = {
   getAllProd,

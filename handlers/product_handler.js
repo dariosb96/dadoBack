@@ -121,18 +121,9 @@ const getAllPublicCatalogHandler = async (req, res) => {
   }
 };
 
-// const generateCatalogPDFHandler = async (req, res) => {
-//   try {
-//     await generateCatalogPDF(req, res);
-//   } catch (error) {
-//     console.error("HANDLER ERROR:", error);
-//     res.status(500).json({ error: "Error generando el PDF" });
-//   }
-// };
-
 const generateCatalogPDFHandler = async (req, res) => {
   try {
-    const userId = req.userId; // viene del token
+    const userId = req.userId;
 
     if (!userId) {
       return res.status(400).json({ error: "Falta el userId en el token" });
@@ -142,6 +133,7 @@ const generateCatalogPDFHandler = async (req, res) => {
       includePhone = true,
       includeBusinessName = true,
       includeOwnerName = true,
+      selectedCategories = []   // <── nuevo
     } = req.body || {};
 
     await generateCatalogPDF({
@@ -149,14 +141,17 @@ const generateCatalogPDFHandler = async (req, res) => {
       includePhone,
       includeBusinessName,
       includeOwnerName,
+      selectedCategories,
       res,
     });
 
   } catch (error) {
-    console.error("ERROR EN HANDLER PDF:", error);
     return res.status(500).json({ error: error.message });
   }
 };
+
+
+
 module.exports = {
   getAllProductsHandler,
   getProductByHandler,
