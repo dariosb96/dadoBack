@@ -5,6 +5,7 @@ const { categoryRouter } = require("./category_routes");
 const {dashboardRouter}   = require("./dashboard_routes");
 const { userRouter } = require("./user_routes");
 const {sellRouter} = require("./sell_routes");
+const { organizationRouter } = require("./organization_routes");
 
 
 const router = Router();
@@ -14,6 +15,7 @@ router.use("/category", categoryRouter);
 router.use("/dash",dashboardRouter );
 router.use("/user", userRouter);
 router.use("/sells", sellRouter)
+router.use("/org", organizationRouter)
 
 
 module.exports = router;

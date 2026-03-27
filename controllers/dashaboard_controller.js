@@ -2,403 +2,196 @@ const Product = require("../models/Product");
 const User = require("../models/User");
 const Sell = require("../models/Sell");
 const SellProduct = require("../models/SellProduct");
-const ProductImage = require("../models/ProductImage");
-const ProductVariant = require("../models/ProductVariant");
-const VariantImage = require("../models/VariantImage");
 const { Op, fn, col, literal } = require("sequelize");
 
 
-const getSalesByDay = async (userId = null) => {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date();
-  endOfDay.setHours(23, 59, 59, 999);
+const buildScopeWhere = (scope = {}) => {
+  if (scope.organizationId) return { organizationId: scope.organizationId };
+  if (scope.userId) return { userId: scope.userId };
+  return {};
+};
 
+const getSalesByDay = async (scope) => {
   const where = {
     status: "finalizado",
-    finishDate: { [Op.between]: [startOfDay, endOfDay] },
-    ...(userId && { userId })
+    finishDate: {
+      [Op.between]: [
+        new Date(new Date().setHours(0, 0, 0, 0)),
+        new Date(new Date().setHours(23, 59, 59, 999)),
+      ],
+    },
+    ...buildScopeWhere(scope),
   };
 
-  const sales = await Sell.findAll({
+  return Sell.findAll({
     where,
-    include: [
-      {
-        model: SellProduct,
-        as: "items",
-        include: [
-          {
-            model: Product,
-            as: "product",
-            required: false,
-            include: [
-              { model: ProductImage, as: "images", required: false },
-              { model: ProductVariant, as: "variants", required: false }
-            ]
-          }
-        ]
-      },
-      { model: User, as: "user", attributes: ["id", "name"], required: !!userId }
-    ],
-    order: [["finishDate", "DESC"]]
+    include: [{ model: SellProduct, as: "items" }],
+    order: [["finishDate", "DESC"]],
+  });
+};
+
+const getSalesByMonth = async (scope) => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+  return Sell.findAll({
+    where: {
+      status: "finalizado",
+      finishDate: { [Op.between]: [start, end] },
+      ...buildScopeWhere(scope),
+    },
+    include: [{ model: SellProduct, as: "items" }],
+  });
+};
+
+const getSalesByWeek = async (scope) => {
+  const now = new Date();
+  const firstDay = new Date(now.setDate(now.getDate() - now.getDay()));
+  const lastDay = new Date(now.setDate(firstDay.getDate() + 6));
+
+  return Sell.findAll({
+    where: {
+      status: "finalizado",
+      finishDate: { [Op.between]: [firstDay, lastDay] },
+      ...buildScopeWhere(scope),
+    },
+    include: [{ model: SellProduct, as: "items" }],
+  });
+};
+
+const getDashboardDataByDateRange = async (startDate, endDate, scope) => {
+  const sells = await Sell.findAll({
+    where: {
+      status: "finalizado",
+      finishDate: { [Op.between]: [new Date(startDate), new Date(endDate)] },
+      ...buildScopeWhere(scope),
+    },
+    include: [{ model: SellProduct, as: "items" }],
   });
 
-  return sales;
+  let totalSales = 0;
+  sells.forEach(s => s.items.forEach(i => {
+    totalSales += Number(i.price) * i.quantity;
+  }));
+
+  return { totalSales, totalSells: sells.length };
+};
+
+const getSalesByUser = async (scope) => {
+  return Sell.findAll({
+    where: {
+      status: "finalizado",
+      ...buildScopeWhere(scope),
+    },
+    include: [{ model: User, as: "user", attributes: ["id", "name"] }],
+  });
 };
 
 
-const getSalesByMonth = async (userId = null) => {
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
+const getTopSoldProducts = async (startDate, endDate, scope) => {
+  const now = new Date();
 
-  const endOfMonth = new Date();
-  endOfMonth.setMonth(endOfMonth.getMonth() + 1);
-  endOfMonth.setDate(0);
-  endOfMonth.setHours(23, 59, 59, 999);
+  const start =
+    startDate ||
+    new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const where = {
+  const end =
+    endDate ||
+    new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+  const whereSell = {
     status: "finalizado",
-    finishDate: { [Op.between]: [startOfMonth, endOfMonth] },
-    ...(userId && { userId })
+    finishDate: { [Op.between]: [start, end] },
+    ...buildScopeWhere(scope),
   };
 
-  const sales = await Sell.findAll({
-    where,
-    include: [
-      {
-        model: SellProduct,
-        as: "items",
-        include: [
-          {
-            model: Product,
-            as: "product",
-            required: false,
-            include: [
-              { model: ProductImage, as: "images", required: false },
-              { model: ProductVariant, as: "variants", required: false }
-            ]
-          }
-        ]
-      },
-      { model: User, as: "user", attributes: ["id", "name"], required: !!userId }
-    ],
-    order: [["finishDate", "DESC"]]
-  });
-
-  return sales;
-};
-
-const getTopSoldProducts = async (startDate, endDate, userId = null) => {
-  const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  const end = endDate ? new Date(endDate) : new Date();
-
-  const topData = await SellProduct.findAll({
+  return SellProduct.findAll({
     attributes: [
-      "ProductId",
-      [fn("SUM", col("quantity")), "totalSold"]
+      "productId",
+      [fn("SUM", col("SellProduct.quantity")), "totalSold"],
     ],
+
     include: [
       {
         model: Sell,
         as: "sell",
         attributes: [],
-        where: {
-          status: "finalizado",
-          finishDate: { [Op.between]: [start, end] },
-          ...(userId && { userId })
-        }
-      }
-    ],
-    group: ["ProductId"],
-    order: [literal(`"totalSold" DESC`)],
-    limit: 10,
-    raw: true
-  });
-
-  const productIds = topData.map(p => p.ProductId);
-
-  const products = await Product.findAll({
-    where: { id: productIds, ...(userId && { userId }) },
-    include: [
-      { model: ProductImage, as: "images", attributes: ["url"], required: false },
-      {
-        model: ProductVariant,
-        as: "variants",
-        required: false,
-        include: [{ model: VariantImage, as: "images", attributes: ["url"], required: false }]
-      }
-    ]
-  });
-
-  return topData.map(item => ({
-    ...item,
-    product: products.find(p => p.id === item.ProductId) || null
-  }));
-};
-
-const getSalesByUser = async (userId) => {
-  const where = {
-    status: "finalizado",
-    ...(userId && { userId })
-  };
-
-  const sales = await Sell.findAll({
-    where,
-    include: [
-      {
-        model: SellProduct,
-        as: "items",
-        include: [
-          {
-            model: Product,
-            as: "product",
-            required: false,
-            include: [
-              { model: ProductImage, as: "images", required: false },
-              { model: ProductVariant, as: "variants", required: false }
-            ]
-          }
-        ]
+        where: whereSell,
+        required: true,
       },
-      { model: User, as: "user", attributes: ["id", "name"], required: !!userId }
-    ],
-    order: [["finishDate", "DESC"]]
-  });
-
-  return sales;
-};
-
-const getDashboardDataByDateRange = async (startDate, endDate, userId = null) => {
-  const where = {
-    status: "finalizado",
-    finishDate: { [Op.between]: [new Date(startDate), new Date(endDate)] },
-    ...(userId && { userId })
-  };
-
-  const sells = await Sell.findAll({
-    where,
-    include: [
       {
-        model: SellProduct,
-        as: "items",
-        include: [
-          {
-            model: Product,
-            as: "product",
-            required: false,
-            attributes: ["name", "price", "buyPrice"],
-          }
-        ]
-      }
+        model: Product.unscoped(), // 🔥 rompe el defaultScope
+        attributes: [
+          "id",
+          "name",
+        ],
+        required: true,
+      },
     ],
-    order: [["finishDate", "ASC"]]
-  });
 
-  let totalSales = 0;
-  let totalProfit = 0;
-  let totalQuantity = 0;
-  const dailyStats = {};
-
-  sells.forEach(sell => {
-    const day = sell.finishDate.toISOString().split("T")[0];
-    if (!dailyStats[day]) dailyStats[day] = { sales: 0, profit: 0, quantity: 0 };
-
-    sell.items.forEach(item => {
-      const total = Number(item.price) * item.quantity;
-      const buy = Number(item.product?.buyPrice || 0);
-      const profit = (Number(item.price) - buy) * item.quantity;
-
-      totalSales += total;
-      totalProfit += profit;
-      totalQuantity += item.quantity;
-
-      dailyStats[day].sales += total;
-      dailyStats[day].profit += profit;
-      dailyStats[day].quantity += item.quantity;
-    });
-  });
-
-  const dailyData = Object.entries(dailyStats).map(([date, data]) => ({ date, ...data }));
-
-  return {
-    totalSales,
-    totalProfit,
-    totalQuantity,
-    totalSells: sells.length,
-    range: { startDate, endDate },
-    dailyData
-  };
-};
-
-const getSalesByWeek = async (userId = null) => {
-  const now = new Date();
-  const day = now.getDay();
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-
-  const startOfWeek = new Date(now.setDate(diff));
-  startOfWeek.setHours(0, 0, 0, 0);
-
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
-  endOfWeek.setHours(23, 59, 59, 999);
-
-  const where = {
-    status: "finalizado",
-    finishDate: { [Op.between]: [startOfWeek, endOfWeek] },
-    ...(userId && { userId })
-  };
-
-  const sales = await Sell.findAll({
-    where,
-    include: [
-      {
-        model: SellProduct,
-        as: "items",
-        include: [
-          { model: Product, as: "product" }
-        ]
-      }
+    group: [
+      "SellProduct.productId",
+      "Product.id",
+      "Product.name",
     ],
-    order: [["finishDate", "DESC"]]
-  });
 
-  return sales;
+    order: [[literal('"totalSold"'), "DESC"]],
+
+    limit: 10,
+
+    subQuery: false,
+    raw: true,
+  });
 };
 
 
-const getAllUsers = async () => {
-  const users = await User.findAll({
-    attributes: ["id", "name", "email", "businessName", "role", "createdAt"],
-    order: [["createdAt", "DESC"]],
+const getLowStockProducts = async (threshold, scope) => {
+  return Product.findAll({
+    where: {
+      stock: { [Op.lte]: threshold },
+      ...buildScopeWhere(scope),
+    },
   });
-
-  return users;
 };
 
-const getLowStockProducts = async (threshold = 5, userId = null) => {
-  const where = {
-    stock: { [Op.lte]: threshold },
-    ...(userId && { userId })
-  };
-
+const getInventoryValue = async (scope) => {
   const products = await Product.findAll({
-    where,
-    include: [
-      {
-        model: ProductVariant,
-        as: "variants",
-        required: false
-      }
-    ],
-    order: [["stock", "ASC"]]
+    where: buildScopeWhere(scope),
   });
 
-  return products;
+  let total = 0;
+  products.forEach(p => total += p.stock * p.buyPrice);
+
+  return { inventoryValue: total };
 };
 
-const getProductProfit = async (startDate, endDate, userId = null) => {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    throw new Error("Las fechas proporcionadas no son válidas");
-  }
-
+const getProductProfit = async (startDate, endDate, scope) => {
   const sells = await Sell.findAll({
     where: {
       status: "finalizado",
-      finishDate: { [Op.between]: [start, end] },
-      ...(userId && { userId })
+      finishDate: { [Op.between]: [new Date(startDate), new Date(endDate)] },
+      ...buildScopeWhere(scope),
     },
-    include: [
-      {
-        model: SellProduct,
-        as: "items",
-        include: [
-          { model: Product, as: "product", attributes: ["name", "buyPrice"] }
-        ]
-      }
-    ]
+    include: [{ model: SellProduct, as: "items" }],
   });
 
-  const profitMap = {};
+  let profit = 0;
+  sells.forEach(s => s.items.forEach(i => {
+    profit += (i.price - i.cost) * i.quantity;
+  }));
 
-  sells.forEach(sell => {
-    sell.items.forEach(item => {
-      const pid = item.ProductId;
+  return { profit };
+};
 
-      if (!profitMap[pid]) {
-        profitMap[pid] = {
-          productId: pid,
-          name: item.product?.name || "N/A",
-          quantity: 0,
-          revenue: 0,
-          profit: 0
-        };
-      }
-
-      const revenue = Number(item.price) * item.quantity;
-      const buy = Number(item.product?.buyPrice || 0);
-      const profit = (Number(item.price) - buy) * item.quantity;
-
-      profitMap[pid].quantity += item.quantity;
-      profitMap[pid].revenue += revenue;
-      profitMap[pid].profit += profit;
-    });
+const getAllUsers = async () => {
+  return User.findAll({
+    attributes: ["id", "name", "email", "role", "createdAt"],
   });
-
-  return Object.values(profitMap).sort((a, b) => b.profit - a.profit);
 };
 
 const getNewUsersPerMonth = async () => {
-  const users = await User.findAll({
-    attributes: ["id", "createdAt"],
-    order: [["createdAt", "ASC"]]
-  });
-
-  const stats = {};
-
-  users.forEach(user => {
-    const date = new Date(user.createdAt);
-    const key = `${date.getFullYear()}-${(date.getMonth() + 1)
-      .toString()
-      .padStart(2, "0")}`;
-
-    if (!stats[key]) stats[key] = 0;
-    stats[key]++;
-  });
-
-  return stats;
-};
-
-const getInventoryValue = async (userId = null) => {
-  const where = {
-    ...(userId && { userId })
-  };
-
-  const products = await Product.findAll({ where });
-
-  let totalUnits = 0;
-  let totalBuyValue = 0;
-  let totalSellValue = 0;
-
-  products.forEach(p => {
-    const qty = Number(p.stock);
-    const buy = Number(p.buyPrice || 0);
-    const sell = Number(p.price || 0);
-
-    totalUnits += qty;
-    totalBuyValue += qty * buy;
-    totalSellValue += qty * sell;
-  });
-
-  return {
-    totalUnits,
-    totalBuyValue,
-    totalSellValue,
-    projectedProfit: totalSellValue - totalBuyValue
-  };
+  return User.findAll({ attributes: ["createdAt"] });
 };
 
 module.exports = {
@@ -412,6 +205,5 @@ module.exports = {
   getSalesByWeek,
   getProductProfit,
   getNewUsersPerMonth,
-  getInventoryValue
+  getInventoryValue,
 };
-

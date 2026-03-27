@@ -11,16 +11,11 @@ const Category = sequelize.define('Category', {
     type: DataTypes.STRING,
     allowNull: false,
   },
-  userId: {
+  organizationId: {
     type: DataTypes.UUID,
     allowNull: false,
-    references: {
-      model: 'Users',
-      key: 'id',
-    },
-    onDelete: 'CASCADE',
-    onUpdate: 'CASCADE',
   },
 });
+
 
 module.exports = Category;

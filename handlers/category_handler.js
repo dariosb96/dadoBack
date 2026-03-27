@@ -1,9 +1,10 @@
 const {
   getCategories,
-  getCategoriesByUser,
+  getCategoriesByOrganization,
   createCategory,
   getCategoryById,
   deleteCategory,
+  updateCategory
 } = require("../controllers/category_controller");
 
 /* 🔹 Obtener TODAS las categorías (futuro: solo superadmin) */
@@ -17,39 +18,41 @@ const getAllCategories = async (req, res) => {
   }
 };
 
-/* 🔹 Obtener categorías del usuario autenticado */
-const getCategoryByUser_handler = async (req, res) => {
+/* 🔹 Obtener categorías de la organización del usuario */
+const getCategoriesByOrg_handler = async (req, res) => {
   try {
-    const userId = req.userId; // viene del token
-    const categories = await getCategoriesByUser(userId);
+    const organizationId = req.user.organizationId;
+
+    const categories = await getCategoriesByOrganization(organizationId);
     res.status(200).json(categories);
   } catch (error) {
-    console.error("Error en getCategoryByUser_handler:", error);
+    console.error("Error en getCategoriesByOrg_handler:", error);
     res.status(500).json({ error: error.message });
   }
 };
 
-/* 🔹 Crear nueva categoría */
+/* 🔹 Crear nueva categoría para la organización */
 const createCat_handler = async (req, res) => {
   try {
-    const userId = req.userId; // viene del token
     const { name } = req.body;
 
-    if (!name) return res.status(400).json({ error: "El nombre es obligatorio" });
+    const newCategory = await createCategory(name, req.user);
 
-    const newCategory = await createCategory({ name, userId });
     res.status(201).json(newCategory);
   } catch (error) {
     console.error("Error en createCat_handler:", error);
     res.status(500).json({ error: error.message });
   }
 };
-
-/* 🔹 Obtener categoría por ID */
+/* 🔹 Obtener categoría por ID (validando que pertenezca a la org) */
 const getCategoryById_handler = async (req, res) => {
   try {
-    const category = await getCategoryById(req.params.id);
-    if (!category) return res.status(404).json({ error: "Categoría no encontrada" });
+    const organizationId = req.user.organizationId;
+    const category = await getCategoryById(req.params.id, organizationId);
+
+    if (!category) {
+      return res.status(404).json({ error: "Categoría no encontrada" });
+    }
 
     res.status(200).json(category);
   } catch (error) {
@@ -58,10 +61,12 @@ const getCategoryById_handler = async (req, res) => {
   }
 };
 
-/* 🔹 Eliminar categoría */
+/* 🔹 Eliminar categoría (solo si pertenece a la org) */
 const deleteCat_handler = async (req, res) => {
   try {
-    const result = await deleteCategory(req.params.id);
+    const organizationId = req.user.organizationId;
+
+    const result = await deleteCategory(req.params.id, organizationId);
     res.status(200).json(result);
   } catch (error) {
     console.error("Error en deleteCat_handler:", error);
@@ -69,10 +74,26 @@ const deleteCat_handler = async (req, res) => {
   }
 };
 
+const updateCat_handler = async (req, res) => {
+  try {
+    const { name } = req.body;
+    const { id } = req.params;
+    const organizationId = req.user.organizationId;
+
+    const updatedCategory = await updateCategory(id, organizationId, name);
+
+    res.status(200).json(updatedCategory);
+  } catch (error) {
+    console.error("Error en updateCat_handler:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getAllCategories,
-  getCategoryByUser_handler,
+  getCategoriesByOrg_handler,
   createCat_handler,
   getCategoryById_handler,
   deleteCat_handler,
+  updateCat_handler
 };

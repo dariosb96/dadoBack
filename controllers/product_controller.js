@@ -1,20 +1,27 @@
 const { Op } = require("sequelize");
+const sequelize = require("../db"); // 👈 importa tu instancia
 const Product = require("../models/Product");
 const User = require("../models/User");
 const Category = require("../models/Category");
 const ProductImage = require("../models/ProductImage");
 const ProductVariant = require("../models/ProductVariant");
-const VariantImage = require("../models/VariantImage")
+const VariantImage = require("../models/VariantImage");
 const cloudinary = require("../middlewares/cloudinary");
-const PDFDocument =require("pdfkit");
-const axios = require("axios");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
 
-const getActiveProd = async () => {
-  const products = await Product.findAll({
-    where: { isActive: true },
+const getUserWithOrg = async (userId) => {
+  const user = await User.findByPk(userId);
+  if (!user) throw new Error("Usuario no encontrado");
+  if (!user.organizationId) throw new Error("Usuario sin organización asignada");
+  return user;
+};
+
+/* ================= GET ================= */
+
+const getActiveProd = async (userId) => {
+  const user = await getUserWithOrg(userId);
+
+  return Product.findAll({
+    where: { isActive: true, organizationId: user.organizationId },
     include: [
       { model: Category },
       { model: ProductImage, as: "images" },
@@ -25,12 +32,13 @@ const getActiveProd = async () => {
       },
     ],
   });
-  return products;
 };
 
 const getAllProd = async (userId) => {
-  const products = await Product.findAll({
-    where: { userId },
+  const user = await getUserWithOrg(userId);
+
+  return Product.findAll({
+    where: { organizationId: user.organizationId },
     include: [
       { model: Category },
       { model: ProductImage, as: "images" },
@@ -41,94 +49,79 @@ const getAllProd = async (userId) => {
       },
     ],
   });
-  return products;
 };
 
+/* ================= CREATE ================= */
 
-const createProduct = async ({ name, description, color, buyPrice, price, stock, categoryId, userId, variants }, files = {}) => {
+const createProduct = async (data, files = {}) => {
+  return sequelize.transaction(async (t) => {
+    const user = await getUserWithOrg(data.userId);
 
-  const product = await Product.create({
-    name,
-    description,
-    color,
-    buyPrice,
-    price,
-    stock,
-    categoryId,
-    userId,
-  });
+    const product = await Product.create(
+      { ...data, organizationId: user.organizationId },
+      { transaction: t }
+    );
 
-  const productFiles = files.images || [];
-  if (productFiles.length > 0) {
-    const imagesData = productFiles.map((file) => ({
-      productId: product.id,
-      url: file.path || file.location || file.filename,
-      public_id: file.filename || null,
-    }));
-    await ProductImage.bulkCreate(imagesData);
-  }
-
-  for (let i = 0; i < (variants?.length || 0); i++) {
-    const v = variants[i];
-
-    const variantPrice = v.price != null && v.price !== "" ? v.price : product.price;
-    const variantBuyPrice = v.buyPrice != null && v.buyPrice !== "" ? v.buyPrice : product.buyPrice;
-
-
-    const newVariant = await ProductVariant.create({
-      productId: product.id,
-      color: v.color || null,
-      size: v.size || null,
-      stock: v.stock ?? 0,
-      price: variantPrice,
-      buyPrice: variantBuyPrice,
-    });
-
-    const variantFiles = files[`variantImages_${i}`] || [];
-    if (variantFiles.length > 0) {
-      const variantImagesData = variantFiles.map((file) => ({
-        variantId: newVariant.id,
-        url: file.path || file.location || file.filename,
-        public_id: file.filename || null,
-      }));
-      await VariantImage.bulkCreate(variantImagesData);
+    const productFiles = files.images || [];
+    if (productFiles.length) {
+      await ProductImage.bulkCreate(
+        productFiles.map((file) => ({
+          productId: product.id,
+          url: file.path,
+          public_id: file.filename,
+        })),
+        { transaction: t }
+      );
     }
-  }
 
-  return await Product.findByPk(product.id, {
-    include: [
-      { model: ProductImage, as: "images" },
-      {
-        model: ProductVariant,
-        as: "variants",
-        include: [{ model: VariantImage, as: "images" }],
-      },
-      { model: Category, as: "Category" },
-    ],
+    for (let i = 0; i < (data.variants?.length || 0); i++) {
+      const v = data.variants[i];
+
+      const newVariant = await ProductVariant.create(
+        {
+          productId: product.id,
+          color: v.color || null,
+          size: v.size || null,
+          stock: v.stock ?? 0,
+          price: v.price ?? product.price,
+          buyPrice: v.buyPrice ?? product.buyPrice,
+          organizationId: user.organizationId,
+        },
+        { transaction: t }
+      );
+
+      const variantFiles = files[`variantImages_${i}`] || [];
+      if (variantFiles.length) {
+        await VariantImage.bulkCreate(
+          variantFiles.map((file) => ({
+            variantId: newVariant.id,
+            url: file.path,
+            public_id: file.filename,
+          })),
+          { transaction: t }
+        );
+      }
+    }
+
+    return Product.findByPk(product.id, {
+      include: [
+        { model: ProductImage, as: "images" },
+        { model: ProductVariant, as: "variants", include: [{ model: VariantImage, as: "images" }] },
+        { model: Category },
+      ],
+      transaction: t,
+    });
   });
 };
 
-
-const getProductById = async (id) => {
-  const product = await Product.findByPk(id, {
-    include: [
-      { model: Category },
-      { model: ProductImage, as: "images" },
-      {
-        model: ProductVariant,
-        as: "variants",
-        include: [{ model: VariantImage, as: "images" }],
-      },
-    ],
-  });
-  return product;
-};
-
+/* ================= UPDATE ================= */
 
 const updateProduct = async (req) => {
+  const user = await getUserWithOrg(req.userId);
   const { id } = req.params;
 
-  const product = await Product.findByPk(id, {
+  const product = await Product.findOne({
+    where: { id, organizationId: user.organizationId },
     include: [
       { model: ProductImage, as: "images" },
       { model: ProductVariant, as: "variants", include: { model: VariantImage, as: "images" } },
@@ -138,417 +131,131 @@ const updateProduct = async (req) => {
   if (!product) throw new Error("Producto no encontrado");
 
   const data = req.body;
-
-  const files = req.files ? Object.values(req.files).flat() : [];
   const filesByField = req.filesByField || {};
 
   if (data.imagesToDelete) {
-    let imagesToDelete = data.imagesToDelete;
-    if (typeof imagesToDelete === "string") {
-      try {
-        imagesToDelete = JSON.parse(imagesToDelete);
-      } catch (err) {
-        imagesToDelete = [imagesToDelete];
-      }
-    }
-    if (!Array.isArray(imagesToDelete)) imagesToDelete = [imagesToDelete];
+    const ids = JSON.parse(data.imagesToDelete);
+    const imgs = await ProductImage.findAll({ where: { id: ids } });
 
-    const imgsToDelete = await ProductImage.findAll({ where: { id: imagesToDelete } });
-    for (const img of imgsToDelete) {
-      await cloudinary.uploader.destroy(img.public_id);
+    for (const img of imgs) {
+      if (img.public_id) await cloudinary.uploader.destroy(img.public_id);
       await img.destroy();
     }
   }
 
   const mainImages = filesByField.images || [];
   if (mainImages.length) {
-    const imgs = mainImages.map((file) => ({
-      url: file.path,
-      public_id: file.filename,
-      productId: product.id,
-    }));
-    await ProductImage.bulkCreate(imgs);
-  }
-
-  if (data.removedVariantIds) {
-    let removedIds = data.removedVariantIds;
-    if (typeof removedIds === "string") {
-      try {
-        removedIds = JSON.parse(removedIds);
-      } catch (err) {
-        removedIds = [removedIds];
-      }
-    }
-    if (!Array.isArray(removedIds)) removedIds = [removedIds];
-    await VariantImage.destroy({ where: { variantId: removedIds } });
-    await ProductVariant.destroy({ where: { id: removedIds } });
-  }
-
-  if (data.variants) {
-    const variants = typeof data.variants === "string" ? JSON.parse(data.variants) : data.variants;
-
-    for (const variantData of variants) {
-      const { uid, id: variantId, color, size, stock, price, buyPrice, removedImageIds } = variantData;
-
-      let variant;
-      if (variantId) {
-        variant = await ProductVariant.findByPk(variantId);
-        if (!variant) continue;
-        await variant.update({ color, size, stock, price, buyPrice });
-      } else {
-        variant = await ProductVariant.create({ productId: id, color, size, stock, price, buyPrice });
-      }
-
-      // Eliminar imágenes viejas de la variante
-      if (removedImageIds && removedImageIds.length) {
-        await VariantImage.destroy({ where: { id: removedImageIds } });
-      }
-
-      // Agregar nuevas imágenes
-      const variantFiles = filesByField[`variantImages_${uid}`] || [];
-      if (variantFiles.length) {
-        const imgs = variantFiles.map((file) => ({
-          url: file.path,
-          public_id: file.filename,
-          variantId: variant.id,
-        }));
-        await VariantImage.bulkCreate(imgs);
-      }
-    }
+    await ProductImage.bulkCreate(
+      mainImages.map((file) => ({
+        url: file.path,
+        public_id: file.filename,
+        productId: product.id,
+      }))
+    );
   }
 
   await product.update({
-    name: data.name,
-    description: data.description,
-    color: data.color,
-    buyPrice: data.buyPrice,
-    price: data.price,
-    stock: data.stock,
-    categoryId: data.categoryId,
+    name: data.name ?? product.name,
+    description: data.description ?? product.description,
+    buyPrice: data.buyPrice ?? product.buyPrice,
+    price: data.price ?? product.price,
+    stock: data.stock ?? product.stock,
+    categoryId: data.categoryId ?? product.categoryId,
   });
 
-  const updated = await Product.findByPk(id, {
-    include: [
-      { model: ProductImage, as: "images" },
-      { model: ProductVariant, as: "variants", include: { model: VariantImage, as: "images" } },
-    ],
-  });
-
-  return updated;
+  return getProductById(id, req.userId);
 };
 
+/* ================= GET PRODUCT BY ID ================= */
+const getProductById = async (id, userId) => {
+  const user = await getUserWithOrg(userId);
 
-const deleteProduct = async (id) => {
-  const product = await Product.findByPk(id, {
+  const product = await Product.findOne({
+    where: {
+      id,
+      organizationId: user.organizationId, // 🔥 evita ver productos de otra org
+    },
     include: [
+      { model: Category },
       { model: ProductImage, as: "images" },
-      { model: ProductVariant, as: "variants" },
+      {
+        model: ProductVariant,
+        as: "variants",
+        include: [{ model: VariantImage, as: "images" }],
+      },
     ],
   });
+
+  if (!product) throw new Error("Producto no encontrado");
+
+  return product;
+};
+
+/* ================= DELETE (HARD) ================= */
+
+const deleteProduct = async (id, userId) => {
+  const user = await getUserWithOrg(userId);
+
+  const product = await Product.findOne({
+    where: { id, organizationId: user.organizationId },
+    include: [
+      { model: ProductImage, as: "images" },
+      {
+        model: ProductVariant,
+        as: "variants",
+        include: [{ model: VariantImage, as: "images" }],
+      },
+    ],
+  });
+
   if (!product) throw new Error("Producto no encontrado");
 
   for (const img of product.images) {
     if (img.public_id) await cloudinary.uploader.destroy(img.public_id);
   }
 
-  await ProductVariant.destroy({ where: { productId: id } });
+  for (const variant of product.variants) {
+    for (const img of variant.images) {
+      if (img.public_id) await cloudinary.uploader.destroy(img.public_id);
+    }
+  }
+
   await product.destroy();
-  return { message: "Producto eliminado con éxito" };
+  return { message: "Producto eliminado permanentemente" };
 };
 
-const filterProducts = async (filters) => {
-  const { search, category, min, max, page = 1, limit = 10, sort = "name_asc" } =
-    filters;
+/* ================= FILTER ================= */
 
-  const where = {};
+const filterProducts = async (filters, userId) => {
+  const user = await getUserWithOrg(userId);
+  const { search, category, min, max, page = 1, limit = 10 } = filters;
+
+  const where = { organizationId: user.organizationId };
+
   if (search) where.name = { [Op.iLike]: `%${search}%` };
+  if (category) where.categoryId = category;
   if (min || max) {
     where.price = {};
-    if (min) where.price[Op.gte] = min;
-    if (max) where.price[Op.lte] = max;
+    if (min) where.price[Op.gte] = +min;
+    if (max) where.price[Op.lte] = +max;
   }
-  if (category) where.categoryId = category;
 
-  const offset = (page - 1) * limit;
-  let order = [["name", "ASC"]];
-  if (sort === "price_desc") order = [["price", "DESC"]];
-  if (sort === "price_asc") order = [["price", "ASC"]];
-  if (sort === "name_desc") order = [["name", "DESC"]];
-
-  const products = await Product.findAndCountAll({
+  const { count, rows } = await Product.findAndCountAll({
     where,
-    include: [
-      Category,
-      { model: ProductImage, as: "images" },
-      { model: ProductVariant, as: "variants" },
-    ],
-    limit: parseInt(limit),
-    offset: parseInt(offset),
-    order,
-  });
-
-  return {
-    total: products.count,
-    page: parseInt(page),
-    totalPages: Math.ceil(products.count / limit),
-    results: products.rows,
-  };
-};
-
-const isUUID = (str) =>
-  typeof str === "string" &&
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(str);
-
-const getPublicCatalogByUser = async (userId, category) => {
-  const where = { userId, isActive: true };
-  if (category) {
-    if (isUUID(category)) {
-      where.categoryId = category;
-    } else {
-      const matchedCategories = await Category.findAll({
-        where: { name: { [Op.iLike]: `%${category}%` } },
-        attributes: ["id", "name"],
-      });
-      if (!matchedCategories.length) {
-        return { businessName: null, products: [] };
-      }
-      const ids = matchedCategories.map((c) => c.id);
-      where.categoryId = { [Op.in]: ids };
-    }
-  }
-  const products = await Product.findAll({
-    where,
-    include: [
-      { model: Category, attributes: ["id", "name"] },
-      { model: User, attributes: ["businessName", "phone"] },
-      { model: ProductImage, as: "images" },
-{ model: ProductVariant, as: "variants", include: { model: VariantImage, as: "images" } }
-    ],
-  });
-  if (!products.length) {
-    return { businessName: null, products: [] };
-  }
-  return {
-    businessName: products[0].User?.businessName || null,
-    products,
-  };
-};
-
-
-const getPublicCatalogs = async () => {
-  const users = await User.findAll({
-    attributes: ["id", "businessName"],
-    include: [
-      {
-        model: Product,
-        attributes: ["id", "name","color", "price", "isActive", "categoryId"],
-        where: { isActive: true },
-        include: [
-          { model: Category, attributes: ["id", "name"] },
-          { model: ProductVariant, as: "variants" },
-        ],
-      },
-    ],
-  });
-
-  return users;
-};
-
-
-
-async function downloadImageToTemp(url) {
-  try {
-    const response = await axios.get(url, { responseType: "arraybuffer" });
-
-    const tmpPath = path.join(
-      os.tmpdir(),
-      `img_${Date.now()}_${Math.random()}.jpg`
-    );
-
-    fs.writeFileSync(tmpPath, response.data);
-
-    return tmpPath;
-  } catch (err) {
-    console.error("Error descargando imagen:", err.message);
-    return null; 
-  }
-}
-
-
-const generateCatalogPDF = async ({
-  userId,
-  includePhone = true,
-  includeBusinessName = true,
-  includeOwnerName = true,
-  selectedCategories = [],
-  res
-}) => {
-
-  const user = await User.findByPk(userId);
-  if (!user) throw new Error("Usuario no encontrado");
-  let categoryIds = [];
-
-  if (Array.isArray(selectedCategories) && selectedCategories.length > 0) {
-
-    if (typeof selectedCategories[0] === "number") {
-      categoryIds = selectedCategories;
-    }
-
-    else if (typeof selectedCategories[0] === "string") {
-
-      const uuids = selectedCategories.filter(isUUID);
-      const names = selectedCategories.filter(c => !isUUID(c));
-
-
-      if (uuids.length > 0) categoryIds.push(...uuids);
-
-      if (names.length > 0) {
-        const found = await Category.findAll({
-          where: { name: names }
-        });
-
-        if (found.length === 0 && uuids.length === 0) {
-          throw new Error("Ninguna de las categorías seleccionadas existe");
-        }
-
-        categoryIds.push(...found.map(c => c.id));
-      }
-    }
-  }
-
-
-  const whereCondition = {
-    userId,
-    isActive: true
-  };
-
-  if (categoryIds.length > 0) {
-    whereCondition.categoryId = categoryIds;
-  }
-
-  const products = await Product.findAll({
-    where: whereCondition,
+    limit: +limit,
+    offset: (page - 1) * limit,
     include: [{ model: ProductImage, as: "images" }],
-    order: [["name", "ASC"]],
   });
 
-  if (!products.length) throw new Error("No hay productos activos con esos filtros");
-
-
-  const doc = new PDFDocument({
-    size: "LETTER",
-    margins: { top: 40, bottom: 50, left: 40, right: 40 }
-  });
-
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", "attachment; filename=catalogo.pdf");
-
-  doc.pipe(res);
-
-
-  doc.font("Helvetica-Bold").fontSize(24);
-
-  let title = "";
-  if (includeBusinessName && user.businessName) title += user.businessName.toUpperCase();
-  if (!title) title = "CATÁLOGO DE PRODUCTOS";
-
-  doc.text(title, { align: "center" });
-
-  // Subtítulo
-  doc.moveDown(0.3);
-  doc.font("Helvetica").fontSize(12);
-
-  let sub = "";
-  if (includeOwnerName) sub += `Propietario: ${user.name}   `;
-  if (includePhone && user.phone) sub += `Tel: ${user.phone}`;
-
-  if (sub.trim()) doc.text(sub, { align: "center" });
-
-  doc.moveDown(1.5);
-
-
-  const cardWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const cardHeight = 190;
-  const padding = 15;
-  const imgSize = 130;
-
-  for (const p of products) {
-
-    let startY = doc.y;
-
-    // Salto de página si no cabe
-    if (startY + cardHeight > doc.page.height - doc.page.margins.bottom - 10) {
-      doc.addPage();
-      startY = doc.y;
-    }
-
-    const startX = doc.page.margins.left;
-
-    // Fondo de la tarjeta
-    doc.save()
-      .roundedRect(startX, startY, cardWidth, cardHeight, 10)
-      .fillOpacity(0.08)
-      .fill("#4B0082")
-      .restore();
-
-    // Imagen del producto
-    const imgX = startX + padding;
-    const imgY = startY + padding;
-
-    const firstImage = p.images?.length ? p.images[0].url : null;
-
-    if (firstImage) {
-      const tmp = await downloadImageToTemp(firstImage);
-      if (tmp) {
-        try {
-          doc.image(tmp, imgX, imgY, { fit: [imgSize, imgSize] });
-        } catch {
-          doc.fontSize(10).fillColor("red").text("Imagen no disponible", imgX, imgY + imgSize / 2);
-        }
-      } else {
-        doc.fontSize(10).fillColor("red").text("Imagen no disponible", imgX, imgY + imgSize / 2);
-      }
-    } else {
-      doc.fontSize(10).fillColor("red").text("Sin imagen", imgX, imgY + imgSize / 2);
-    }
-
-    // Texto del producto
-    const textX = imgX + imgSize + padding;
-    let textY = startY + padding;
-
-    doc.font("Helvetica-Bold").fontSize(16).fillColor("#000")
-      .text(p.name, textX, textY, { width: cardWidth - imgSize - padding * 3 });
-
-    textY += 25;
-
-    doc.font("Helvetica").fontSize(12);
-    doc.text(`Precio: $${p.price}`, textX, textY); textY += 18;
-
-    if (p.stock !== undefined) {
-      doc.text(`Stock: ${p.stock}`, textX, textY);
-      textY += 18;
-    }
-
-    if (p.description) {
-      doc.fontSize(10).fillColor("#333")
-        .text(p.description, textX, textY, { width: cardWidth - imgSize - padding * 3 });
-    }
-
-    doc.y = startY + cardHeight + 22;
-  }
-
-  doc.end();
+  return { total: count, page: +page, results: rows };
 };
 
 module.exports = {
-  getAllProd,
-  createProduct,
+  filterProducts,
   deleteProduct,
   updateProduct,
+  createProduct,
   getProductById,
-  filterProducts,
+  getAllProd,
   getActiveProd,
-  getPublicCatalogByUser,
-  getPublicCatalogs,
-  generateCatalogPDF
 };

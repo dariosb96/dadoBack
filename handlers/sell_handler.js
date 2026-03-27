@@ -1,34 +1,36 @@
-const { createSell, confirmSell, getUserSells, getSellById, deleteSell, cancelSell } = require("../controllers/Sell_controller");
-
+const {
+  createSell,
+  confirmSell,
+  getUserSells,
+  getSellById,
+  cancelSell,
+  deleteSell,
+} = require("../controllers/Sell_controller");
 
 const createSellHandler = async (req, res) => {
   try {
-    const userId = req.userId;
-    const { products } = req.body;
-
-    if (!products || !Array.isArray(products) || products.length === 0) {
-      return res.status(400).json({ error: "Debes enviar al menos un producto" });
-    }
-
-    const sell = await createSell(userId, products);
-    return res.status(201).json(sell);
-
+    const sell = await createSell(req.user.id, req.body.products);
+    res.status(201).json(sell);
   } catch (error) {
-    console.error("Error en createSellHandler:", error.message);
-    if (error.message.includes("Stock insuficiente") || error.message.includes("no encontrado")) {
-      return res.status(400).json({ error: error.message });
-    }
-    return res.status(500).json({ error: "Error interno del servidor" });
+    res.status(400).json({ error: error.message });
   }
 };
 
+
 const confirmSellHandler = async (req, res) => {
   try {
-    const userId = req.userId;
-    const { sellId } = req.params;
+    const sell = await confirmSell(req.params.sellId, req.user.id);
+    res.json(sell);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
 
-    const sell = await confirmSell(sellId, userId);
-    res.status(200).json(sell);
+
+const cancelSellHandler = async (req, res) => {
+  try {
+    const response = await cancelSell(req.params.id, req.user.id);
+    res.json(response);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -37,42 +39,39 @@ const confirmSellHandler = async (req, res) => {
 
 const getUserSellsHandler = async (req, res) => {
   try {
-    const userId = req.userId; 
-    const sells = await getUserSells(userId);
-    res.status(200).json(sells);
+    const sells = await getUserSells(req.user.id);
+    res.json(sells);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 };
 
+
 const getSellByIdHandler = async (req, res) => {
   try {
-    const { id } = req.params;
-    const sell = await getSellById(id);
-    res.status(200).json(sell);
+    const sell = await getSellById(req.params.id, req.user.id);
+    res.json(sell);
   } catch (error) {
     res.status(404).json({ error: error.message });
   }
 };
 
-const cancelSellHandler = async (req, res) => {
+const deleteSellHandler = async (req, res) => {
   try {
-    const userId = req.userId;
-    const  sellId  = req.params.id
-
-    const response = await cancelSell(sellId, userId);
-    return res.json(response);
-
+    const response = await deleteSell(req.params.id, req.user.id);
+    res.json(response);
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    res.status(400).json({ error: error.message });
   }
 };
+
 
 
 module.exports = {
   createSellHandler,
   confirmSellHandler,
+  cancelSellHandler,
   getUserSellsHandler,
   getSellByIdHandler,
-  cancelSellHandler
+  deleteSellHandler
 };

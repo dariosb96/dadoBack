@@ -1,16 +1,20 @@
 const { Router } = require("express");
-const { createSellHandler, confirmSellHandler, getUserSellsHandler, getSellByIdHandler, deleteSell_handler, cancelSellHandler } = require("../handlers/sell_handler");
-const verifytoken = require("../middlewares/auth"); 
+const verifytoken = require("../middlewares/auth");
+const allowOrgRoles = require("../middlewares/allowedRoles");
+const handlers = require("../handlers/sell_handler");
 
 const SellRouter = Router();
 
-SellRouter.post("/", verifytoken, createSellHandler);
-SellRouter.put("/confirm/:sellId", verifytoken, confirmSellHandler);
-SellRouter.get("/", verifytoken, getUserSellsHandler);
-SellRouter.get("/:id", verifytoken, getSellByIdHandler);
-SellRouter.put("/cancel/:id", verifytoken, cancelSellHandler);
+SellRouter.post("/", verifytoken, allowOrgRoles("owner","admin","staff"), handlers.createSellHandler);
 
-module.exports = SellRouter;
+SellRouter.put("/confirm/:sellId", verifytoken, allowOrgRoles("owner","admin"), handlers.confirmSellHandler);
 
+SellRouter.get("/", verifytoken, allowOrgRoles("owner","admin","staff"), handlers.getUserSellsHandler);
+
+SellRouter.get("/:id", verifytoken, allowOrgRoles("owner","admin","staff"), handlers.getSellByIdHandler);
+
+SellRouter.put("/cancel/:id", verifytoken, allowOrgRoles("owner","admin"), handlers.cancelSellHandler);
+
+SellRouter.delete("/del/:id", verifytoken, allowOrgRoles("owner","admin"), handlers.deleteSellHandler);
 
 module.exports.sellRouter = SellRouter;

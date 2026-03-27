@@ -4,31 +4,31 @@ const app = express();
 const sequelize = require("./db.js");
 const router = require("./routes/index.js");
 const { Product, Category, User } = require("./models");
-const cors = require('cors')
-const morgan = require("morgan")
-
+const cors = require("cors");
+const morgan = require("morgan");
 const path = require("path");
 const rateLimit = require("express-rate-limit");
+
+const isProduction = process.env.NODE_ENV === "production";
+
+/* ================= MIDDLEWARES ================= */
 
 app.use(
   "/login",
   rateLimit({
-    windowMs: 15 * 60 * 1000, 
+    windowMs: 15 * 60 * 1000,
     max: 5,
     message: "Demasiados intentos, espera 15 minutos",
   })
 );
 
-
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use(morgan("dev"));
-
+app.use(morgan(isProduction ? "combined" : "dev"));
 
 const allowedOrigins = [
-  "https://daddo.vercel.app", 
-  "http://localhost:5173",        
+  "https://daddo.vercel.app",
+  "http://localhost:5173",
 ];
-
 
 app.use(
   cors({
@@ -40,24 +40,30 @@ app.use(
       }
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Cache-Control", "Pragma", "Expires"],
   })
 );
-
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/", router);
 
+/* ================= DB CONNECTION ================= */
 
 sequelize
-  .sync({ force: false })
-  .then(() => {
-    console.log("DB sincronizada");
+  .authenticate()
+  .then(async () => {
+    console.log("✅ DB conectada correctamente");
+
+    if (!isProduction) {
+      console.log("🛠 Sincronizando modelos en LOCAL...");
+      await sequelize.sync({ alter: true }); // solo local
+    }
+
     const PORT = process.env.PORT || 3001;
-    app.listen(PORT, () => console.log(`Servidor escuchando en puerto ${PORT}`));
+    app.listen(PORT, () =>
+      console.log(`Servidor corriendo en puerto ${PORT}`)
+    );
   })
   .catch((err) => {
-    console.error("Error al sincronizar la DB:", err);
+    console.error(" Error conectando a la DB:", err);
   });

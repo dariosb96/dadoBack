@@ -1,22 +1,23 @@
 const {Router} = require('express');
-const { getAllCategories, getCategoryById_handler, createCat_handler, deleteCat_handler, getCategoryByUser_handler } = require('../handlers/category_handler');
-const { getCatalogByuserHandler } = require('../handlers/product_handler');
+const {
+  getAllCategories,
+  getCategoryById_handler,
+  createCat_handler,
+  deleteCat_handler,
+  updateCat_handler,
+ 
+} = require('../handlers/category_handler');
+
 const verifytoken = require('../middlewares/auth');
+const allowOrgRoles = require('../middlewares/allowedRoles')
 
 const CategoryRouter = Router();
 
-CategoryRouter.get("/", getAllCategories);
+// ⚠️ SOLO superadmin debería ver todas
+CategoryRouter.get("/", verifytoken, allowOrgRoles("owner"), getAllCategories);
 
-/* 🔹 Categorías del usuario autenticado */
-CategoryRouter.get("/all", verifytoken, getCategoryByUser_handler);
-
-/* 🔹 Crear categoría (requiere token) */
-CategoryRouter.post("/", verifytoken, createCat_handler);
-
-/* 🔹 Obtener categoría por ID */
-CategoryRouter.get("/:id", getCategoryById_handler);
-
-/* 🔹 Eliminar categoría */
-CategoryRouter.delete("/:id", deleteCat_handler);
-
+CategoryRouter.post("/", verifytoken, allowOrgRoles("owner","admin"), createCat_handler);
+CategoryRouter.get("/:id", verifytoken, allowOrgRoles("owner","admin","staff"), getCategoryById_handler);
+CategoryRouter.delete("/:id", verifytoken, allowOrgRoles("owner","admin"), deleteCat_handler);
+CategoryRouter.put("/update/:id", verifytoken, allowOrgRoles("owner","admin"), updateCat_handler);
 module.exports.categoryRouter = CategoryRouter;

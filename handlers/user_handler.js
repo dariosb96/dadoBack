@@ -8,16 +8,16 @@ const secret = process.env.JWT_SECRET;
 
 const createUser_handler = async (req, res) => {
   try {
-    const { name, businessName, email, phone, password } = req.body;
+    const { name,  email, phone, password } = req.body;
     const imageUrl = req.file ? req.file.path : null;
 
-    if (!name || !businessName || !email || !password) {
+    if (!name ||  !email || !password) {
       return res.status(400).json({ error: "Todos los campos son requeridos" });
     }
 
     const newUser = await createUser({ 
       name, 
-      businessName, 
+       
       email, 
       phone, 
       password, 

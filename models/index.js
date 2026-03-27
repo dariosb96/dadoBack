@@ -6,8 +6,11 @@ const SellProduct = require("../models/SellProduct");
 const ProductImage = require("../models/ProductImage");
 const ProductVariant = require("../models/ProductVariant");
 const VariantImage = require("../models/VariantImage");
-
-
+const Organization = require("../models/Organization");
+const Subscription = require("../models/Subscription");
+const Branch = require("../models/Branch");
+const Invitation = require("../models/Invitation");
+const Payment = require("../models/Payment")
 // Categorías ↔ Productos
 Category.hasMany(Product, { foreignKey: "categoryId" });
 Product.belongsTo(Category, { foreignKey: "categoryId" });
@@ -15,10 +18,6 @@ Product.belongsTo(Category, { foreignKey: "categoryId" });
 //  Usuario ↔ Productos
 User.hasMany(Product, { foreignKey: "userId", onDelete: "CASCADE" });
 Product.belongsTo(User, { foreignKey: "userId" });
-
-//  Usuario ↔ Categorías
-User.hasMany(Category, { foreignKey: "userId", onDelete: "CASCADE" });
-Category.belongsTo(User, { foreignKey: "userId" });
 
 // Producto ↔ Imágenes
 Product.hasMany(ProductImage, {
@@ -57,10 +56,14 @@ SellProduct.belongsTo(Sell, { foreignKey: "SellId", as: "sell" });
 
 //  Producto ↔ Productos vendidos (intermedia)
 Product.hasMany(SellProduct, {
-  foreignKey: "ProductId",
-  as: "productItems",
+  foreignKey: "productId",
+  onDelete: "SET NULL" // 🔥 CLAVE
 });
-SellProduct.belongsTo(Product, { foreignKey: "ProductId", as: "product" });
+
+SellProduct.belongsTo(Product, {
+  foreignKey: "productId",
+  onDelete: "SET NULL"
+});
 
 //  Variante ↔ Productos vendidos
 ProductVariant.hasMany(SellProduct, {
@@ -72,17 +75,57 @@ SellProduct.belongsTo(ProductVariant, { foreignKey: "variantId", as: "variant" }
 //  Many-to-Many real: Venta ↔ Producto
 Product.belongsToMany(Sell, {
   through: SellProduct,
-  foreignKey: "ProductId",
+  foreignKey: "productId",
   otherKey: "SellId",
   as: "sells",
 });
 Sell.belongsToMany(Product, {
   through: SellProduct,
   foreignKey: "SellId",
-  otherKey: "ProductId",
+  otherKey: "productId",
   as: "products",
 });
 
+
+
+// Organización ↔ Productos
+Organization.hasMany(Product, { foreignKey: "organizationId" });
+Product.belongsTo(Organization, { foreignKey: "organizationId" });
+
+
+// Organización ↔ Categorías
+Organization.hasMany(Category, { foreignKey: "organizationId" });
+Category.belongsTo(Organization, { foreignKey: "organizationId" });
+
+
+// Organización ↔ Ventas
+Organization.hasMany(Sell, { foreignKey: "organizationId" });
+Sell.belongsTo(Organization, { foreignKey: "organizationId" });
+Organization.hasMany(User, { foreignKey: "organizationId", onDelete: "CASCADE" });
+User.belongsTo(Organization, { foreignKey: "organizationId" });
+
+Organization.hasMany(Product, { foreignKey: "organizationId", onDelete: "CASCADE" });
+Product.belongsTo(Organization, { foreignKey: "organizationId" });
+
+Organization.hasMany(Category, { foreignKey: "organizationId", onDelete: "CASCADE" });
+Category.belongsTo(Organization, { foreignKey: "organizationId" });
+
+Organization.hasMany(Sell, { foreignKey: "organizationId", onDelete: "CASCADE" });
+Sell.belongsTo(Organization, { foreignKey: "organizationId" });
+
+// Organization ↔ Subscription
+Organization.hasOne(Subscription, { foreignKey: "organizationId" });
+Subscription.belongsTo(Organization, { foreignKey: "organizationId" });
+
+Organization.hasMany(Branch);
+Branch.belongsTo(Organization);
+
+Organization.hasMany(Invitation);
+Invitation.belongsTo(Organization);
+
+
+Subscription.hasMany(Payment);
+Payment.belongsTo(Subscription);
 module.exports = {
   Product,
   Category,
@@ -92,4 +135,9 @@ module.exports = {
   ProductImage,
   ProductVariant,
   VariantImage,
+  Organization,
+  Subscription,
+  Branch,
+  Invitation,
+  Payment
 };
